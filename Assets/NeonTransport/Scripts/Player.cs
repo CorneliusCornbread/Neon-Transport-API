@@ -13,17 +13,17 @@ namespace NeonNetworking
         /// <summary>
         /// The minimum percent that will be for the target pos, based on distance to move
         /// </summary>
-        public float minInterp = 0.2f;
+        public float minInterp = 0.25f;
 
         [Range(0f, 1f)]
         [Tooltip("The max percent that will be used for the target pos, based on distance to move")]
         /// <summary>
         /// The max percent that will be used for the target pos, based on distance to move
         /// </summary>
-        public float maxInterp = 0.95f;
+        public float maxInterp = 1;
 
         [Range(0, .25f)]
-        public float interpFactor = 0.02f;
+        public float interpFactor = 0.016f;
 
         private bool started = false;
 

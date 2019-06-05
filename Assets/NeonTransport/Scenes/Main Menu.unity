@@ -96,7 +96,7 @@ LightmapSettings:
     m_PVRFilteringAtrousPositionSigmaAO: 1
     m_ShowResolutionOverlay: 1
     m_ExportTrainingData: 0
-  m_LightingDataAsset: {fileID: 112000000, guid: 5cc0c6c35b2a7884390c9a5d7347d3c0,
+  m_LightingDataAsset: {fileID: 112000000, guid: 205136556ac399d4fbfcc50f326ab328,
     type: 2}
   m_UseShadowmask: 1
 --- !u!196 &4
@@ -321,18 +321,18 @@ MonoBehaviour:
   m_GameObject: {fileID: 1046200543}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e8893fbe4d2a6894f8bc64ed9feca06a, type: 3}
+  m_Script: {fileID: 11500000, guid: 4f5a01ada0dee4c45a9799739c040c32, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  playerPrefab: {fileID: 3647072668365323484, guid: 1ae0eb9f8aa6ad247bee52771ac9ea68,
-    type: 3}
+  playerPrefab: {fileID: 0}
   serverLastMsgTime: 0
+  simulatedLag: 0
   IP: localhost
   highDebug: 1
   platform: {fileID: 1431208501}
-  noConn: {fileID: 2100000, guid: 262a37c52267d9c43ad0a0c969efc634, type: 2}
-  server: {fileID: 2100000, guid: 0525f3be5975ac641bccad95c7a415fb, type: 2}
-  client: {fileID: 2100000, guid: 56eae7de03d94ee438a2192f9396bec2, type: 2}
+  noConn: {fileID: 2100000, guid: ded7c2accc94db346bd1904ba8b613c3, type: 2}
+  server: {fileID: 2100000, guid: 44fe54a085fd3de44b7a086a9038f83e, type: 2}
+  client: {fileID: 2100000, guid: 2f1952a7a27eb8641a255c211d4f3668, type: 2}
 --- !u!4 &1046200545
 Transform:
   m_ObjectHideFlags: 0
@@ -396,7 +396,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 262a37c52267d9c43ad0a0c969efc634, type: 2}
+  - {fileID: 2100000, guid: ded7c2accc94db346bd1904ba8b613c3, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
