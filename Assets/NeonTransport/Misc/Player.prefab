@@ -106,7 +106,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   OwnerID: 
   InstanceID: 
-  minInterp: 0.2
-  maxInterp: 0.95
-  interpFactor: 0.02
+  minInterp: 0.25
+  maxInterp: 1
+  interpFactor: 0.016
   interp: 1
+  prediction: 1

@@ -39,6 +39,10 @@ namespace NeonNetworking
 
         public string localClientID { get; private set; }
 
+        [Tooltip("The amount of simulated delay in miliseconds")]
+        [Range(0, 2000)]
+        public int simulatedLag = 0;
+
         private float syncDelay = .15f;
 
         private volatile ConcurrentQueue<Client> disClientEvents;
@@ -660,6 +664,8 @@ namespace NeonNetworking
         
             byte[] packet;
 
+            Thread.Sleep(simulatedLag);
+
             try
             {
                 packet = prepSend(msg);
@@ -1230,7 +1236,7 @@ namespace NeonNetworking
 
                 else
                 {
-                    Debug.LogError("Input endpoint that is not connected");
+                    Debug.LogWarning("Input endpoint that is not connected");
                 }
             }
 

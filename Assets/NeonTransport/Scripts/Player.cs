@@ -37,7 +37,11 @@ namespace NeonNetworking
         private Quaternion interpRot;
 
         public bool interp = true;
+        public bool prediction = true;
 
+        private float lastPosTime;
+
+        Vector3 predictedDelta;
         Vector3 lastPos;
         Vector3 lastScale;
         Quaternion lastRot;
@@ -80,8 +84,19 @@ namespace NeonNetworking
                 return;
             }
 
-            float error = Vector3.Distance(targetPos, transform.position);
+            if (prediction)
+            {
+                targetPos += predictedDelta * (Time.unscaledTime - lastPosTime);
+                Debug.LogWarning("PREDICT:" + predictedDelta);
+                predictedDelta = new Vector3(0, 0, 0);
+            }
 
+            else
+            {
+                predictedDelta = new Vector3(0, 0, 0);
+            }
+
+            float error = Vector3.Distance(targetPos, transform.position);
             float i = Mathf.Pow(error, 2) * interpFactor;
             float targetInterp = Mathf.Clamp(i, minInterp, maxInterp);
 
@@ -139,6 +154,14 @@ namespace NeonNetworking
                     targetRot = pData.rot;
                     targetScale = pData.scale;
                 }
+
+                lastPosTime = Time.unscaledTime;
+                predictedDelta = new Vector3
+                {
+                    x = transform.position.x - targetPos.x,
+                    y = transform.position.y - targetPos.y,
+                    z = transform.position.z - targetPos.z
+                };
             }
         }
 
