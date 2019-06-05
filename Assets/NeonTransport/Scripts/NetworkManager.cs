@@ -332,8 +332,13 @@ namespace NeonNetworking
 
             //We have to let the program run in the background as we can run into problems with our threads.
             //That and we're on multiplayer, you never want to pause a client whilst in multiplayer.
-            Application.runInBackground = true; 
+            Application.runInBackground = true;
+
+            #if UNITY_SERVER
+            Host();
+            #endif
         }
+
 
         private void Update()
         {
@@ -406,6 +411,8 @@ namespace NeonNetworking
                 }
             }
 
+            #if !UNITY_SERVER
+
             if (Input.GetKeyDown(KeyCode.Alpha0))
             {
                 float randX = UnityEngine.Random.Range(-10f, 10f);
@@ -450,6 +457,25 @@ namespace NeonNetworking
                     DisconnectClient(c);
                 }
             }
+            #endif
+
+            #if UNITY_SERVER
+            if (Input.GetKeyDown(KeyCode.Alpha3))
+            {
+                Disconnect();
+                platform.material = noConn;
+            }
+
+            else if (Input.GetKeyDown(KeyCode.Alpha4))
+            {
+                Debug.Log("Disconnecting all clients");
+
+                foreach (Client c in connectedClients)
+                {
+                    DisconnectClient(c);
+                }
+            }
+            #endif
         }
 
         /* log
@@ -480,7 +506,7 @@ namespace NeonNetworking
         }
         */
 
-        #region Host and Connect functions
+#region Host and Connect functions
         /// <summary>
         /// Open a socket for our server to start sending and recieving information
         /// </summary>
@@ -574,9 +600,9 @@ namespace NeonNetworking
 
             Invoke("ClientStep", 1);
         }
-        #endregion
+#endregion
 
-        #region Send and Recieve data functions
+#region Send and Recieve data functions
         /// <summary>
         /// Send variable to a given target
         /// </summary>
@@ -664,9 +690,9 @@ namespace NeonNetworking
         
             byte[] packet;
 
-            #if UNITY_EDITOR
+#if UNITY_EDITOR
             Thread.Sleep(simulatedLag);
-            #endif
+#endif
 
             try
             {
@@ -831,7 +857,7 @@ namespace NeonNetworking
                     if (highDebug)
                         Debug.Log("STRING RECIEVED: (" + (string)message + ")");
 
-                    #region Message check
+#region Message check
                     if (isServer)
                     {
                         switch ((string)message)
@@ -900,7 +926,7 @@ namespace NeonNetworking
                                 break;
                         }
                     }
-                    #endregion
+#endregion
                     break;
 
                 case (byte)MessageType.Int:
@@ -1162,7 +1188,7 @@ namespace NeonNetworking
 
             _IsListeningVar = true;
         }
-        #endregion
+#endregion
 
         /// <summary>
         /// Function that's called when we recieve a message, can be used to handle server specific data
