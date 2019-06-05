@@ -664,7 +664,9 @@ namespace NeonNetworking
         
             byte[] packet;
 
+            #if UNITY_EDITOR
             Thread.Sleep(simulatedLag);
+            #endif
 
             try
             {
