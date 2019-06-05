@@ -354,6 +354,8 @@ namespace NeonNetworking
                     {
                         Debug.LogWarning("CURRENT MSG");
 
+                        OnManagerRecieve(msg);
+
                         foreach (NetworkObject obj in netObjects)
                         {
                             obj.rec(msg, msg.end);
@@ -1153,6 +1155,15 @@ namespace NeonNetworking
             _IsListeningVar = true;
         }
         #endregion
+
+        /// <summary>
+        /// Function that's called when we recieve a message, can be used to handle server specific data
+        /// </summary>
+        /// <param name="data">Data recieved</param>
+        public virtual void OnManagerRecieve(MsgEvent data)
+        {
+
+        }
 
         /// <summary>
         /// Add server/client connection
