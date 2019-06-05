@@ -78,6 +78,7 @@ namespace NeonNetworking
 
             if (!interp)
             {
+                interpPos = transform.position;
                 transform.position = targetPos;
                 transform.rotation = targetRot;
                 transform.localScale = targetScale;
@@ -86,7 +87,7 @@ namespace NeonNetworking
 
             if (prediction)
             {
-                targetPos += predictedDelta * (Time.unscaledTime - lastPosTime);
+                targetPos += predictedDelta * (Time.unscaledTime - lastPosTime) * (1 + ping);
                 Debug.LogWarning("PREDICT:" + predictedDelta);
                 predictedDelta = new Vector3(0, 0, 0);
             }

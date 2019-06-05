@@ -40,6 +40,17 @@ namespace NeonNetworking
             }
         }
 
+        /// <summary>
+        /// The amount of time in miliseconds it takes to send a message from the client to the server
+        /// </summary>
+        public float ping
+        {
+            get
+            {
+                return NetworkManager.Instance.Ping;
+            }
+        }
+
         void Start()
         {
             Debug.Log("Adding Net Object");

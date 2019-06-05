@@ -324,7 +324,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4f5a01ada0dee4c45a9799739c040c32, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  playerPrefab: {fileID: 0}
+  playerPrefab: {fileID: 3647072668365323484, guid: b06d1449f283a8e4cb83f46a2db33f9a,
+    type: 3}
   serverLastMsgTime: 0
   simulatedLag: 0
   IP: localhost

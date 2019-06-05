@@ -66,6 +66,14 @@ namespace NeonNetworking
         public Material server;
         public Material client;
 
+        private float startPingTime;
+        private volatile float unscaledTimeThreaded;
+
+        /// <summary>
+        /// Time in miliseconds it takes to round trip ping
+        /// </summary>
+        public float Ping { get; private set; }
+
         public GameObject stringToPrefab(string objName)
         {
             if (highDebug)
@@ -411,6 +419,8 @@ namespace NeonNetworking
                 }
             }
 
+            unscaledTimeThreaded = Time.unscaledTime;
+
             #if !UNITY_SERVER
 
             if (Input.GetKeyDown(KeyCode.Alpha0))
@@ -506,7 +516,7 @@ namespace NeonNetworking
         }
         */
 
-#region Host and Connect functions
+        #region Host and Connect functions
         /// <summary>
         /// Open a socket for our server to start sending and recieving information
         /// </summary>
@@ -547,6 +557,8 @@ namespace NeonNetworking
 
             socketRecieveThread = new Thread(Recieve);
             socketRecieveThread.Start();
+
+            Invoke("PingFunc", 2);
         }
 
         /// <summary>
@@ -598,11 +610,12 @@ namespace NeonNetworking
 
             //Send("HELLO SERVER", tmpRemote);
 
+            Invoke("PingFunc", 2);
             Invoke("ClientStep", 1);
         }
-#endregion
+        #endregion
 
-#region Send and Recieve data functions
+        #region Send and Recieve data functions
         /// <summary>
         /// Send variable to a given target
         /// </summary>
@@ -690,9 +703,9 @@ namespace NeonNetworking
         
             byte[] packet;
 
-#if UNITY_EDITOR
+            #if UNITY_EDITOR
             Thread.Sleep(simulatedLag);
-#endif
+#           endif
 
             try
             {
@@ -857,7 +870,7 @@ namespace NeonNetworking
                     if (highDebug)
                         Debug.Log("STRING RECIEVED: (" + (string)message + ")");
 
-#region Message check
+                    #region Message check
                     if (isServer)
                     {
                         switch ((string)message)
@@ -889,6 +902,26 @@ namespace NeonNetworking
                                 eventRec = true;
                                 break;
 
+                            case "PING":
+                                Send("PONG", e.RemoteEndPoint);
+                                eventRec = true;
+                                break;
+
+                            case "PONG":
+                                Client targetC = connectedClients.Find(i => i.endPoint.ToString() == e.RemoteEndPoint.ToString());
+
+                                if (targetC != null)
+                                {
+                                    targetC.ping = 1000 * (unscaledTimeThreaded - targetC.pingMsgStartTime);
+                                    Debug.Log("PING: " + targetC.ping + " TIME: " + unscaledTimeThreaded);
+                                }
+
+                                else
+                                    Debug.LogWarning("Recieved ping from non connected client");
+
+                                eventRec = true;
+                                break;
+
                             default:
                                 eventRec = false;
 
@@ -914,7 +947,19 @@ namespace NeonNetworking
                                 break;
 
                             case "ALIVE":
+                                Ping = Time.unscaledTime - startPingTime;
                                 serverLastMsgTime = 0;
+                                eventRec = true;
+                                break;
+
+                            case "PING":
+                                Send("PONG", e.RemoteEndPoint);
+                                eventRec = true;
+                                break;
+
+                            case "PONG":
+                                Ping = 1000 * (unscaledTimeThreaded - startPingTime);
+                                Debug.Log("PING: " + Ping + " TIME: " + unscaledTimeThreaded);
                                 eventRec = true;
                                 break;
 
@@ -926,7 +971,7 @@ namespace NeonNetworking
                                 break;
                         }
                     }
-#endregion
+                    #endregion
                     break;
 
                 case (byte)MessageType.Int:
@@ -1188,7 +1233,7 @@ namespace NeonNetworking
 
             _IsListeningVar = true;
         }
-#endregion
+        #endregion
 
         /// <summary>
         /// Function that's called when we recieve a message, can be used to handle server specific data
@@ -1323,6 +1368,7 @@ namespace NeonNetworking
                 Debug.LogWarning("SERVER SHUTDOWN");
 
                 CancelInvoke("SyncStep");
+                CancelInvoke("Ping");
 
                 if (!isQuitting)
                     Broadcast("DISCONNECT");
@@ -1359,6 +1405,7 @@ namespace NeonNetworking
                 Debug.LogWarning("CLIENT SHUTDOWN");
 
                 CancelInvoke("ClientStep");
+                CancelInvoke("Ping");
 
                 if (!isQuitting)
                     Send("DISCONNECT", clientConnection);
@@ -1550,12 +1597,12 @@ namespace NeonNetworking
             {
                 c.lastReplyRec++;
 
-                if (c.lastReplyRec > 20)
+                if (c.lastReplyRec > 200)
                 {
                     DisconnectClient(c);
                 }
 
-                else if (c.lastReplyRec > 10)
+                else if (c.lastReplyRec > 100)
                 {
                     Send("HELLO?", c.endPoint);
                 }
@@ -1626,6 +1673,32 @@ namespace NeonNetworking
             }
 
             Invoke("ClientStep", 1);
+        }
+
+        /// <summary>
+        /// Function used to measure ping
+        /// </summary>
+        void PingFunc()
+        {
+            if (isQuitting)
+                return;
+
+            if (isServer)
+            {
+                foreach (Client c in connectedClients)
+                {
+                    c.pingMsgStartTime = Time.unscaledTime;
+                    Send("PING", c.endPoint);
+                }
+            }
+
+            else
+            {
+                startPingTime = Time.unscaledTime;
+                Send("PING", clientConnection);
+            }
+
+            Invoke("PingFunc", 2);
         }
     }
 }
