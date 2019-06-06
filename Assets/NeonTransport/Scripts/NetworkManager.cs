@@ -913,7 +913,6 @@ namespace NeonNetworking
                                 if (targetC != null)
                                 {
                                     targetC.ping = 1000 * (unscaledTimeThreaded - targetC.pingMsgStartTime);
-                                    Debug.Log("PING: " + targetC.ping + " TIME: " + unscaledTimeThreaded);
                                 }
 
                                 else
@@ -959,7 +958,6 @@ namespace NeonNetworking
 
                             case "PONG":
                                 Ping = 1000 * (unscaledTimeThreaded - startPingTime);
-                                Debug.Log("PING: " + Ping + " TIME: " + unscaledTimeThreaded);
                                 eventRec = true;
                                 break;
 

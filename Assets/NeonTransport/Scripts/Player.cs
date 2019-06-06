@@ -27,6 +27,8 @@ namespace NeonNetworking
 
         private bool started = false;
 
+        private Vector3 lastRealPos;
+
         private Vector3 targetPos;
         private Vector3 interpPos;
 
@@ -39,9 +41,6 @@ namespace NeonNetworking
         public bool interp = true;
         public bool prediction = true;
 
-        private float lastPosTime;
-
-        Vector3 predictedDelta;
         Vector3 lastPos;
         Vector3 lastScale;
         Quaternion lastRot;
@@ -83,18 +82,6 @@ namespace NeonNetworking
                 transform.rotation = targetRot;
                 transform.localScale = targetScale;
                 return;
-            }
-
-            if (prediction)
-            {
-                targetPos += predictedDelta * (Time.unscaledTime - lastPosTime) * (1 + ping);
-                Debug.LogWarning("PREDICT:" + predictedDelta);
-                predictedDelta = new Vector3(0, 0, 0);
-            }
-
-            else
-            {
-                predictedDelta = new Vector3(0, 0, 0);
             }
 
             float error = Vector3.Distance(targetPos, transform.position);
@@ -156,13 +143,18 @@ namespace NeonNetworking
                     targetScale = pData.scale;
                 }
 
-                lastPosTime = Time.unscaledTime;
-                predictedDelta = new Vector3
+                if (prediction)
                 {
-                    x = transform.position.x - targetPos.x,
-                    y = transform.position.y - targetPos.y,
-                    z = transform.position.z - targetPos.z
-                };
+                    Vector3 predictedDelta = new Vector3
+                    {
+                        x = pData.pos.x - lastRealPos.x,
+                        y = pData.pos.y - lastRealPos.y,
+                        z = pData.pos.z - lastRealPos.z
+                    };
+
+                    lastRealPos = pData.pos;
+                    targetPos += predictedDelta * (ping / 1000);
+                }
             }
         }
 
