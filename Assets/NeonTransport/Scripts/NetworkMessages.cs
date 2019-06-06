@@ -39,4 +39,16 @@ namespace NeonNetworking.DataTypes
         [SerializeAbleField(0)]
         public string IDToDestroy;
     }
+
+    [SerializeAbleClass]
+    public class MatchData
+    {
+        [SerializeAbleField(0)]
+        public string MatchName;
+
+        [SerializeAbleField(1)]
+        public int PlayerCount;
+
+        public System.Net.EndPoint sender;
+    }
 }

@@ -20,7 +20,8 @@
         DisconnectEvent,
         PlayerData,
         ClientID,
-        NetDestroy
+        NetDestroy,
+        MatchData
     }
 
     public enum SendMethod

@@ -37,6 +37,8 @@ namespace NeonNetworking
         private bool pendingData = false;
         private EndPoint targetEnd;
 
+        private bool recievingMatch = false;
+
         public string localClientID { get; private set; }
 
         [Tooltip("The amount of simulated delay in miliseconds")]
@@ -51,6 +53,8 @@ namespace NeonNetworking
         private volatile ConcurrentQueue<ThreadedInstantiate> threadedInstantiate;
 
         public string IP = "localhost";
+
+        public string ServerName = "Default Transport Server";
 
         /// <summary>
         /// Debug bool used for in depth debugging
@@ -191,11 +195,18 @@ namespace NeonNetworking
                     packet[1019] = (byte)MessageType.ClientID;
                     break;
 
-                case var expression when msgType == typeof(NetDestroyMsg): //Client ID type serialization
+                case var expression when msgType == typeof(NetDestroyMsg): //Netdestroy type serialization
                     packet = Serializer.Serialize(msg);
                     size = packet.Length;
                     Array.Resize(ref packet, 1024);
                     packet[1019] = (byte)MessageType.NetDestroy;
+                    break;
+
+                case var expression when msgType == typeof(MatchData): //Match data type serialization
+                    packet = Serializer.Serialize(msg);
+                    size = packet.Length;
+                    Array.Resize(ref packet, 1024);
+                    packet[1019] = (byte)MessageType.MatchData;
                     break;
 
                 case var expression when msgType == typeof(byte[]): //If we recieved a byte array
@@ -613,6 +624,15 @@ namespace NeonNetworking
             Invoke("PingFunc", 2);
             Invoke("ClientStep", 1);
         }
+
+        /// <summary>
+        /// Used when we want match data from available servers
+        /// </summary>
+        /// <param name="target">Target we want match data </param>
+        public void RecieveMatches(EndPoint[] targets)
+        {
+
+        }
         #endregion
 
         #region Send and Recieve data functions
@@ -921,6 +941,17 @@ namespace NeonNetworking
                                 eventRec = true;
                                 break;
 
+                            case "MATCHREQUEST":
+                                MatchData match = new MatchData
+                                {
+                                    MatchName = ServerName,
+                                    PlayerCount = connectedClients.Count
+                                };
+
+                                Send(match, e.RemoteEndPoint); 
+                                eventRec = true;
+                                break;
+
                             default:
                                 eventRec = false;
 
@@ -1167,6 +1198,47 @@ namespace NeonNetworking
                     }
                     break;
 
+                case (byte)MessageType.MatchData:
+                    try
+                    {
+                        message = Serializer.DeSerialize<MatchData>(data);
+                        MatchData matchData = (MatchData)message;
+                        Debug.Log("MATCH DATA RECIEVED: " + matchData.MatchName);
+                        eventRec = true;
+
+                        if (recievingMatch)
+                        {
+                            matchData.sender = e.RemoteEndPoint;
+                            OnMatchRecieve(matchData);
+                            return;
+                        }
+
+                        else
+                        {
+                            Recieve();
+                            Debug.LogWarning("Recieved match data when we didn't expect it");
+                            return;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogError("Caught exception with deserialize: " + ex);
+                        message = "CORRUPT";
+
+                        if (recievingMatch)
+                        {
+                            recievingMatch = false;
+                            return;
+                        }
+
+                        else
+                        {
+                            Recieve();
+                            Debug.LogWarning("Recieved match data when we didn't expect it");
+                            return;
+                        }
+                    }
+
                 default:
                     Debug.LogError("Object recieved has no valid type");
                     break;
@@ -1240,6 +1312,15 @@ namespace NeonNetworking
         public virtual void OnManagerRecieve(MsgEvent data)
         {
 
+        }
+
+        /// <summary>
+        /// Function that's called when we recieve match data
+        /// </summary>
+        /// <param name="data">Data recieved</param>
+        public virtual void OnMatchRecieve(MatchData m)
+        {
+            
         }
 
         /// <summary>
