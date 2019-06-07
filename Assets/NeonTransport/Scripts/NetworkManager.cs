@@ -38,6 +38,14 @@ namespace NeonNetworking
         private EndPoint targetEnd;
 
         private bool recievingMatch = false;
+        public float MatchRequestTimeout = 10;
+        public bool listeningForMatch
+        {
+            get
+            {
+                return socket.EnableBroadcast;
+            }
+        }
 
         public string localClientID { get; private set; }
 
@@ -363,7 +371,6 @@ namespace NeonNetworking
         {
             if (!isQuitting)
             {
-
                 for (int i = 0; i < pendingObjs.Count; i++)
                 {
                     NetInstantiate obj = new NetInstantiate();
@@ -449,7 +456,6 @@ namespace NeonNetworking
 
             else if (Input.GetKeyDown(KeyCode.Alpha1))
             {
-                NetExit();
                 isQuitting = false;
                 Connect(IP);
                 platform.material = client;
@@ -457,7 +463,6 @@ namespace NeonNetworking
 
             else if (Input.GetKeyDown(KeyCode.Alpha2))
             {
-                NetExit();
                 isQuitting = false;
                 Host();
                 platform.material = server;
@@ -477,6 +482,17 @@ namespace NeonNetworking
                 {
                     DisconnectClient(c);
                 }
+            }
+
+            else if (Input.GetKeyDown(KeyCode.Alpha5) && isServer)
+            {
+                CancelInvoke("BroadcastMatch");
+                InvokeRepeating("BroadcastMatch", 0, 0.5f);
+            }
+
+            else if (Input.GetKeyDown(KeyCode.Alpha6) && !isServer)
+            {
+                RecieveMatchBroadcast();
             }
             #endif
 
@@ -536,6 +552,9 @@ namespace NeonNetworking
             if (highDebug)
                 Debug.Log("HOST");
 
+            NetExit();
+
+            recievingMatch = false;
             isQuitting = false;
 
             netObjects = new List<NetworkObject>();
@@ -581,6 +600,9 @@ namespace NeonNetworking
             if (highDebug)
                 Debug.Log("CONNECT");
 
+            NetExit();
+
+            recievingMatch = false;
             isQuitting = false;
 
             netObjects = new List<NetworkObject>();
@@ -631,7 +653,71 @@ namespace NeonNetworking
         /// <param name="target">Target we want match data </param>
         public void RecieveMatches(EndPoint[] targets)
         {
+            if (!isQuitting)
+            {
+                Debug.LogWarning("Cannot recieve matches whilst connected");
+                return;
+            }
 
+            foreach (EndPoint e in targets)
+            {
+                Send("MATCHREQUEST", e);
+            }
+
+            Invoke("RequestTimeout", MatchRequestTimeout);
+        }
+
+        void RequestTimeout()
+        {
+            recievingMatch = false;
+        }
+
+        //Todo, make broadcast match invoke itself automatically so you don't have to InvokeRepeating() it
+        /// <summary>
+        /// Used to broadcast current match if there is one
+        /// </summary>
+        public void BroadcastMatch()
+        {
+            if (isQuitting)
+            {
+                Debug.LogWarning("Cannot broadcast a match when there is no match");
+                return;
+            }
+
+            else if (!isServer)
+            {
+                Debug.LogError("Cannot broadcast a match when you're a client");
+                return;
+            }
+
+            socket.EnableBroadcast = true;
+
+            MatchData match = new MatchData
+            {
+                MatchName = ServerName,
+                PlayerCount = connectedClients.Count
+            };
+
+            IPEndPoint p = new IPEndPoint(IPAddress.Broadcast, 7777);
+            Send(match, p);
+        }
+
+        public void RecieveMatchBroadcast()
+        {
+            if (!isQuitting)
+            {
+                Debug.LogWarning("Cannot recieve a match while we're connected");
+                return;
+            }
+
+            socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            socket.EnableBroadcast = true;
+
+            IPEndPoint p = new IPEndPoint(IPAddress.Any, 7777);
+
+            socket.Bind(p);
+
+            Recieve();
         }
         #endregion
 
@@ -841,9 +927,9 @@ namespace NeonNetworking
         /// <param name="e">Event Args</param>
         private void OnRecieve(object sender, SocketAsyncEventArgs e)
         {
-            if (isQuitting)
+            if (isQuitting && !socket.EnableBroadcast)
             {
-                Debug.Log("Skipping recieve, as we're quitting");
+                Debug.Log("Skipping recieve, as we're quitting and not recieving broadcasts");
                 return;
             }
 
@@ -1206,7 +1292,7 @@ namespace NeonNetworking
                         Debug.Log("MATCH DATA RECIEVED: " + matchData.MatchName);
                         eventRec = true;
 
-                        if (recievingMatch)
+                        if (recievingMatch || listeningForMatch)
                         {
                             matchData.sender = e.RemoteEndPoint;
                             OnMatchRecieve(matchData);
@@ -1225,7 +1311,7 @@ namespace NeonNetworking
                         Debug.LogError("Caught exception with deserialize: " + ex);
                         message = "CORRUPT";
 
-                        if (recievingMatch)
+                        if (recievingMatch || listeningForMatch)
                         {
                             recievingMatch = false;
                             return;
@@ -1320,7 +1406,7 @@ namespace NeonNetworking
         /// <param name="data">Data recieved</param>
         public virtual void OnMatchRecieve(MatchData m)
         {
-            
+            Debug.LogError("MATCH");
         }
 
         /// <summary>
