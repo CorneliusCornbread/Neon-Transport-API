@@ -1028,13 +1028,14 @@ namespace NeonNetworking
                                 break;
 
                             case "MATCHREQUEST":
-                                MatchData match = new MatchData
-                                {
-                                    MatchName = ServerName,
-                                    PlayerCount = connectedClients.Count
-                                };
+                                MatchData match = OnMatchRequest();
 
-                                Send(match, e.RemoteEndPoint); 
+                                if (match != null)
+                                    Send(match, e.RemoteEndPoint);
+
+                                else
+                                    Debug.LogWarning("Match data returned is null, sending no data");
+
                                 eventRec = true;
                                 break;
 
@@ -1075,6 +1076,11 @@ namespace NeonNetworking
 
                             case "PONG":
                                 Ping = 1000 * (unscaledTimeThreaded - startPingTime);
+                                eventRec = true;
+                                break;
+
+                            case "MATCHREQUEST":
+                                Debug.LogWarning("Recieved match request on client");
                                 eventRec = true;
                                 break;
 
@@ -1391,6 +1397,7 @@ namespace NeonNetworking
         }
         #endregion
 
+        #region Virtual Functionality
         /// <summary>
         /// Function that's called when we recieve a message, can be used to handle server specific data
         /// </summary>
@@ -1408,6 +1415,18 @@ namespace NeonNetworking
         {
             Debug.LogError("MATCH");
         }
+
+        public virtual MatchData OnMatchRequest()
+        {
+            MatchData m = new MatchData
+            {
+                MatchName = ServerName,
+                PlayerCount = connectedClients.Count
+            };
+
+            return m;
+        }
+        #endregion
 
         /// <summary>
         /// Add server/client connection
