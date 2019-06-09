@@ -690,6 +690,10 @@ namespace NeonNetworking
                 return;
             }
 
+            else if (highDebug)
+                Debug.LogWarning("Match broadcast");
+
+
             socket.EnableBroadcast = true;
 
             MatchData match = new MatchData
@@ -709,6 +713,8 @@ namespace NeonNetworking
                 Debug.LogWarning("Cannot recieve a match while we're connected");
                 return;
             }
+
+            NetExit();
 
             socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             socket.EnableBroadcast = true;
@@ -1298,7 +1304,7 @@ namespace NeonNetworking
                         Debug.Log("MATCH DATA RECIEVED: " + matchData.MatchName);
                         eventRec = true;
 
-                        if (recievingMatch || listeningForMatch)
+                        if (!isServer && (recievingMatch || listeningForMatch))
                         {
                             matchData.sender = e.RemoteEndPoint;
                             OnMatchRecieve(matchData);
