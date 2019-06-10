@@ -22,10 +22,12 @@ namespace NeonNetworking
 
         public static NetworkManager Instance { get; private set; }
         public Socket socket;
-        public Thread socketRecieveThread;
-        public Thread socketSendThread;
-        public Thread socketBroadcastThread;
-        public Thread mainThread;
+        private Socket LANMatchSocket;
+        private Thread socketRecieveThread;
+        private Thread socketSendThread;
+        private Thread socketBroadcastThread;
+        private Thread LANMatchThread;
+        private Thread mainThread;
         public EndPoint clientConnection;
         public float serverLastMsgTime;
         public List<Client> connectedClients { get; private set; }
@@ -39,13 +41,22 @@ namespace NeonNetworking
 
         private bool recievingMatch = false;
         public float MatchRequestTimeout = 10;
-        public bool listeningForMatch
+        public bool isMatchBroadcasting
         {
             get
             {
-                return socket.EnableBroadcast;
+                try
+                {
+                    return LANMatchSocket.EnableBroadcast;
+                }
+
+                catch
+                {
+                    return false;
+                }
             }
         }
+
 
         public string localClientID { get; private set; }
 
@@ -61,8 +72,10 @@ namespace NeonNetworking
         private volatile ConcurrentQueue<ThreadedInstantiate> threadedInstantiate;
 
         public string IP = "localhost";
-
+        [Tooltip("Port used in host / connection, CANNOT BE 24546 AS THIS IS THE LAN PORT")]
+        public int port = 24545;
         public string ServerName = "Default Transport Server";
+        private const int LANBroadcastPort = 24546;
 
         /// <summary>
         /// Debug bool used for in depth debugging
@@ -333,6 +346,9 @@ namespace NeonNetworking
             if (socketBroadcastThread != null)
                 socketBroadcastThread.Abort();
 
+            if (LANMatchThread != null)
+                LANMatchThread.Abort();
+
             if (socket != null)
                 socket.Close();
 
@@ -495,53 +511,7 @@ namespace NeonNetworking
                 RecieveMatchBroadcast();
             }
             #endif
-
-            #if UNITY_SERVER
-            if (Input.GetKeyDown(KeyCode.Alpha3))
-            {
-                Disconnect();
-                platform.material = noConn;
-            }
-
-            else if (Input.GetKeyDown(KeyCode.Alpha4))
-            {
-                Debug.Log("Disconnecting all clients");
-
-                foreach (Client c in connectedClients)
-                {
-                    DisconnectClient(c);
-                }
-            }
-            #endif
         }
-
-        /* log
-        private void OnLog(string log, string stackTrace, LogType type)
-        {
-            switch (type)
-            {
-                case LogType.Error:
-                    Debug.LogError(log + ", STACK TRACE: " + stackTrace);
-                    break;
-
-                case LogType.Assert:
-                    Debug.LogAssertion(log + ", STACK TRACE: " + stackTrace);
-                    break;
-
-                case LogType.Log:
-                    Debug.Log(log + ", STACK TRACE: " + stackTrace);
-                    break;
-
-                case LogType.Warning:
-                    Debug.LogWarning(log + ", STACK TRACE: " + stackTrace);
-                    break;
-
-                case LogType.Exception:
-                    Debug.LogError(log + ", STACK TRACE: " + stackTrace);
-                    break;
-            }
-        }
-        */
 
         #region Host and Connect functions
         /// <summary>
@@ -553,6 +523,12 @@ namespace NeonNetworking
                 Debug.Log("HOST");
 
             NetExit();
+
+            if (port == LANBroadcastPort)
+            {
+                Debug.LogError("CANNOT HAVE PORT BE: " + port + ", CHOOSE ANOTHER PORT");
+                return;
+            }
 
             recievingMatch = false;
             isQuitting = false;
@@ -569,7 +545,7 @@ namespace NeonNetworking
 
             //Setup socket
             socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-            IPEndPoint ip = new IPEndPoint(IPAddress.Any, 7777);
+            IPEndPoint ip = new IPEndPoint(IPAddress.Any, port);
 
             //Bind socket
             socket.Bind(ip);
@@ -602,6 +578,12 @@ namespace NeonNetworking
 
             NetExit();
 
+            if (port == LANBroadcastPort)
+            {
+                Debug.LogError("CANNOT HAVE PORT BE: " + port + ", CHOOSE ANOTHER PORT");
+                return;
+            }
+
             recievingMatch = false;
             isQuitting = false;
 
@@ -626,7 +608,7 @@ namespace NeonNetworking
 
             if (IPAddress.TryParse(targetip, out s))
             {
-                IPEndPoint sender = new IPEndPoint(s, 7777); //Send to localhost (this machine)
+                IPEndPoint sender = new IPEndPoint(s, port);
                 tmpRemote = (EndPoint)(sender); //Convert to IPEndPoint to EndPoint
             }
 
@@ -646,12 +628,14 @@ namespace NeonNetworking
             Invoke("PingFunc", 2);
             Invoke("ClientStep", 1);
         }
+        #endregion
 
+        #region Matchmaking
         /// <summary>
         /// Used when we want match data from available servers
         /// </summary>
         /// <param name="target">Target we want match data </param>
-        public void RecieveMatches(EndPoint[] targets)
+        public void RecieveMatches(EndPoint[] targets)//Note: this will throw an error if we are not connected and return if we are connected, FIX ME
         {
             if (!isQuitting)
             {
@@ -694,7 +678,10 @@ namespace NeonNetworking
                 Debug.LogWarning("Match broadcast");
 
 
-            socket.EnableBroadcast = true;
+            if (LANMatchSocket == null)
+                LANMatchSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+
+            LANMatchSocket.EnableBroadcast = true;
 
             MatchData match = new MatchData
             {
@@ -702,28 +689,31 @@ namespace NeonNetworking
                 PlayerCount = connectedClients.Count
             };
 
-            IPEndPoint p = new IPEndPoint(IPAddress.Broadcast, 7777);
-            Send(match, p);
+            IPEndPoint p = new IPEndPoint(IPAddress.Broadcast, LANBroadcastPort);
+            Send(match, p, SendMethod.MatchSocketThreaded);
         }
 
         public void RecieveMatchBroadcast()
         {
-            if (!isQuitting)
+            LANMatchSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            LANMatchSocket.EnableBroadcast = true;
+
+            IPEndPoint p = new IPEndPoint(IPAddress.Any, LANBroadcastPort);
+
+            try
             {
-                Debug.LogWarning("Cannot recieve a match while we're connected");
-                return;
+                LANMatchSocket.Bind(p);
             }
 
-            NetExit();
+            catch (Exception e)
+            {
+                string error = "Unable to bind to recieve LAN broadcast messages, is there another instance of a broadcasting game running?";
+                throw new InvalidOperationException(error);
+            }
 
-            socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-            socket.EnableBroadcast = true;
 
-            IPEndPoint p = new IPEndPoint(IPAddress.Any, 7777);
-
-            socket.Bind(p);
-
-            Recieve();
+            RecieveLANMatches(); //TODO: Move match making to anothe script
+            //Recieve();
         }
         #endregion
 
@@ -731,9 +721,9 @@ namespace NeonNetworking
         /// <summary>
         /// Send variable to a given target
         /// </summary>
-        /// <param name="msg">The message you want to send</param>
-        /// <param name="target">Target Endpoint</param>
-        /// <param name="threading">Use main thread or another thread</param>
+        /// <param name="msg">Message you want to send</param>
+        /// <param name="target">Target endpoint</param>
+        /// <param name="method">Send method (asynchronous, synchronous, threaded), threaded by default</param>
         public void Send(object msg, EndPoint target, SendMethod method = SendMethod.Threaded)
         {
             if (isQuitting)
@@ -801,6 +791,24 @@ namespace NeonNetworking
                     socketSendThread = new Thread(() => ThreadedSerializeSend(msg, target));
                     socketSendThread.Start();
                     break;
+
+                case SendMethod.MatchSocketThreaded:
+                    if (msg.GetType() != typeof(MatchData))
+                        throw new ArgumentException("Cannot send data other than match data over match socket and thread");
+
+                    if (LANMatchSocket == null)
+                    {
+                        LANMatchSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+                        LANMatchSocket.EnableBroadcast = true;
+                    }
+
+                    LANMatchThread = new Thread(() => ThreadedMatchSend(msg, target));
+                    LANMatchThread.Start();
+                    break;
+
+                default:
+                    string error = "Send input invalid enum selection: " + method;
+                    throw new NotImplementedException(error);
             }
         }
 
@@ -836,6 +844,36 @@ namespace NeonNetworking
             pendingData = false;
 
             Debug.LogWarning("Threaded send end");
+        }
+
+        /// <summary>
+        /// Internal method used to serialize and send match messages on another thread
+        /// </summary>
+        /// <param name="msg">Match to send</param>
+        /// <param name="target">Target to send message to</param>
+        private void ThreadedMatchSend(object msg, EndPoint target)
+        {
+            if (highDebug)
+                Debug.LogWarning("Threaded match send start");
+
+            byte[] packet;
+
+            try
+            {
+                packet = prepSend(msg);
+            }
+
+            catch (Exception ex)
+            {
+                string message = "Recieved exception from prepSend: " + ex.ToString();
+                Debug.LogError(message + ", MSG: " + msg);
+                throw new Exception(message);
+            }
+
+            LANMatchSocket.SendTo(packet, target);
+
+            if (highDebug)
+                Debug.LogWarning("Threaded match send end");
         }
 
         /// <summary>
@@ -933,9 +971,9 @@ namespace NeonNetworking
         /// <param name="e">Event Args</param>
         private void OnRecieve(object sender, SocketAsyncEventArgs e)
         {
-            if (isQuitting && !socket.EnableBroadcast)
+            if (isQuitting)
             {
-                Debug.Log("Skipping recieve, as we're quitting and not recieving broadcasts");
+                Debug.Log("Skipping recieve, as we're quitting");
                 return;
             }
 
@@ -1304,7 +1342,7 @@ namespace NeonNetworking
                         Debug.Log("MATCH DATA RECIEVED: " + matchData.MatchName);
                         eventRec = true;
 
-                        if (!isServer && (recievingMatch || listeningForMatch))
+                        if (!isServer && (recievingMatch || isMatchBroadcasting))
                         {
                             matchData.sender = e.RemoteEndPoint;
                             OnMatchRecieve(matchData);
@@ -1323,7 +1361,7 @@ namespace NeonNetworking
                         Debug.LogError("Caught exception with deserialize: " + ex);
                         message = "CORRUPT";
 
-                        if (recievingMatch || listeningForMatch)
+                        if (recievingMatch || isMatchBroadcasting)
                         {
                             recievingMatch = false;
                             return;
@@ -1434,6 +1472,7 @@ namespace NeonNetworking
         }
         #endregion
 
+        #region Client Management
         /// <summary>
         /// Add server/client connection
         /// </summary>
@@ -1639,6 +1678,7 @@ namespace NeonNetworking
                 CancelInvoke();
             }
         }
+        #endregion
 
         /// <summary>
         /// Network Instantiate function, instantiates input game object on the network at input position

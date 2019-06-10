@@ -26,8 +26,21 @@
 
     public enum SendMethod
     {
+        /// <summary>
+        /// Send data asynchronously on the main thread
+        /// </summary>
         Async,
+        /// <summary>
+        /// Send data synchronously on the main thread
+        /// </summary>
         Sync,
-        Threaded
+        /// <summary>
+        /// Send data on another thread
+        /// </summary>
+        Threaded,
+        /// <summary>
+        /// Send match data on match specific thread socket and thread over LAN
+        /// </summary>
+        MatchSocketThreaded
     }
 }
