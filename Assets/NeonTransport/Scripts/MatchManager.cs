@@ -32,7 +32,7 @@ namespace NeonNetworking
             }
         }
 
-        public bool SearchingForMatches { get; private set; } = false;
+        public bool IsSearchingForMatches { get; private set; } = false;
         public bool IsBroadcastingMatch { get; private set; } = false;
 
         #region Cleanup
@@ -76,7 +76,10 @@ namespace NeonNetworking
         public void StopMatchBroadcast()
         {
             if (!IsBroadcastingMatch)
-                throw new InvalidOperationException("Cannot stop match broadcast without starting match broadcast");
+            {
+                Debug.LogWarning("Cannot stop match broadcast without starting match broadcast");
+                return;
+            }
 
             IsBroadcastingMatch = false;
             LANMatchSendThread.Abort();
@@ -123,6 +126,12 @@ namespace NeonNetworking
         /// </summary>
         public void StartLANMatchRecieve()
         {
+            if (man.isServer)
+            {
+                Debug.LogError("Cannot recieve matches if we are a server");
+                return;
+            }
+
             if (LANMatchSocket == null)
                 LANMatchSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 
@@ -141,10 +150,26 @@ namespace NeonNetworking
                 throw new InvalidOperationException(error);
             }
 
-            SearchingForMatches = true;
+            IsSearchingForMatches = true;
 
             LANMatchRecieveThread = new Thread(MatchRecieve);
             LANMatchRecieveThread.Start();
+        }
+
+        /// <summary>
+        /// Function used to start recieving LAN matches
+        /// </summary>
+        public void StopLANMatchRecieve()
+        {
+            if (IsSearchingForMatches)
+            {
+                Debug.LogWarning("Cannot stop search without a search to stop");
+                return;
+            }
+
+            IsSearchingForMatches = false;
+            LANMatchSocket.Close();
+            LANMatchRecieveThread.Abort();
         }
 
         /// <summary>

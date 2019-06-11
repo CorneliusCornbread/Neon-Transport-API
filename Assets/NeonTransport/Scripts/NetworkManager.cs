@@ -339,6 +339,10 @@ namespace NeonNetworking
             if (socket != null)
                 socket.Close();
 
+            MatchManager.StopMatchBroadcast();
+
+
+
             CancelInvoke();
         }
 
@@ -499,12 +503,28 @@ namespace NeonNetworking
 
             else if (Input.GetKeyDown(KeyCode.Alpha5) && isServer)
             {
-                MatchManager.StartMatchBroadcast();
+                if (MatchManager.IsBroadcastingMatch)
+                {
+                    MatchManager.StopMatchBroadcast();
+                }
+
+                else
+                {
+                    MatchManager.StartMatchBroadcast();
+                }
             }
 
             else if (Input.GetKeyDown(KeyCode.Alpha6) && !isServer)
             {
-                MatchManager.StartLANMatchRecieve();
+                if (MatchManager.IsSearchingForMatches)
+                {
+                    MatchManager.StopLANMatchRecieve();
+                }
+
+                else
+                {
+                    MatchManager.StartLANMatchRecieve();
+                }
             }
             #endif
         }
