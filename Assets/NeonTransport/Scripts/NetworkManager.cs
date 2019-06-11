@@ -341,8 +341,6 @@ namespace NeonNetworking
 
             MatchManager.StopMatchBroadcast();
 
-
-
             CancelInvoke();
         }
 

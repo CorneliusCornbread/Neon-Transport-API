@@ -83,7 +83,7 @@ namespace NeonNetworking
 
             IsBroadcastingMatch = false;
             LANMatchSendThread.Abort();
-            LANMatchSocket.Dispose();
+            LANMatchSocket.Close();
         }
 
         /// <summary>
@@ -132,9 +132,13 @@ namespace NeonNetworking
                 return;
             }
 
-            if (LANMatchSocket == null)
-                LANMatchSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            else if (IsSearchingForMatches)
+            {
+                Debug.LogError("Cannot call StartLANMAtchRecieve when it's already running");
+                return;
+            }
 
+            LANMatchSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             LANMatchSocket.EnableBroadcast = true;
 
             IPEndPoint p = new IPEndPoint(IPAddress.Any, NetworkManager.LANBroadcastPort);
@@ -161,15 +165,18 @@ namespace NeonNetworking
         /// </summary>
         public void StopLANMatchRecieve()
         {
-            if (IsSearchingForMatches)
+            if (!IsSearchingForMatches)
             {
                 Debug.LogWarning("Cannot stop search without a search to stop");
                 return;
             }
 
+            if (man.highDebug)
+                Debug.Log("Stop LAN listen");
+
             IsSearchingForMatches = false;
-            LANMatchSocket.Close();
             LANMatchRecieveThread.Abort();
+            LANMatchSocket.Close(1);
         }
 
         /// <summary>
