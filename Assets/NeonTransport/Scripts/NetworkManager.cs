@@ -1786,7 +1786,7 @@ namespace NeonNetworking
                 }
             }
 
-            else
+            else if (clientConnection != null)
             {
                 startPingTime = Time.unscaledTime;
                 Send("PING", clientConnection);
