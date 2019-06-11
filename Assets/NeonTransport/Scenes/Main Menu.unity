@@ -332,7 +332,7 @@ MonoBehaviour:
   IP: localhost
   port: 24545
   ServerName: Gamer server
-  highDebug: 0
+  highDebug: 1
   platform: {fileID: 1431208501}
   noConn: {fileID: 2100000, guid: ded7c2accc94db346bd1904ba8b613c3, type: 2}
   server: {fileID: 2100000, guid: 44fe54a085fd3de44b7a086a9038f83e, type: 2}
