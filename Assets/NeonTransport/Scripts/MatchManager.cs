@@ -152,9 +152,6 @@ namespace NeonNetworking
         /// </summary>
         private void MatchSend()
         {
-            if (man.highDebug)
-                Debug.LogWarning("Threaded match send start");
-
             MatchData match = new MatchData
             {
                 MatchName = man.ServerName,
@@ -178,9 +175,6 @@ namespace NeonNetworking
             }
 
             LANMatchSocket.SendTo(packet, target);
-
-            if (man.highDebug)
-                Debug.LogWarning("Threaded match send end");
 
             Thread.Sleep(matchBroadcastInterval);
             MatchSend();

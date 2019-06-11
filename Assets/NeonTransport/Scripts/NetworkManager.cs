@@ -1303,7 +1303,7 @@ namespace NeonNetworking
         /// <param name="data">Data recieved</param>
         public virtual void OnMatchRecieve(MatchData m)
         {
-            Debug.LogError("MATCH");
+            Debug.LogError("MATCH: " + m.MatchName);
         }
 
         public virtual MatchData OnMatchRequest()
