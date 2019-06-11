@@ -21,13 +21,12 @@ namespace NeonNetworking
         #endregion
 
         public static NetworkManager Instance { get; private set; }
-        public Socket socket;
-        private Socket LANMatchSocket;
-        private Thread socketRecieveThread;
-        private Thread socketSendThread;
-        private Thread socketBroadcastThread;
-        private Thread LANMatchThread;
-        private Thread mainThread;
+        public static MatchManager MatchManager { get; private set; } = new MatchManager();
+        public Socket socket { get; private set; }
+        public Thread socketRecieveThread { get; private set; }
+        public Thread socketSendThread { get; private set; }
+        public Thread socketBroadcastThread { get; private set; }
+        public Thread mainThread { get; private set; }
         public EndPoint clientConnection;
         public float serverLastMsgTime;
         public List<Client> connectedClients { get; private set; }
@@ -39,24 +38,15 @@ namespace NeonNetworking
         private bool pendingData = false;
         private EndPoint targetEnd;
 
-        private bool recievingMatch = false;
+        //private bool recievingMatch = false;
         public float MatchRequestTimeout = 10;
-        public bool isMatchBroadcasting
+        public bool IsMatchBroadcasting
         {
             get
             {
-                try
-                {
-                    return LANMatchSocket.EnableBroadcast;
-                }
-
-                catch
-                {
-                    return false;
-                }
+                return MatchManager.IsBroadcastingMatch;
             }
         }
-
 
         public string localClientID { get; private set; }
 
@@ -75,7 +65,7 @@ namespace NeonNetworking
         [Tooltip("Port used in host / connection, CANNOT BE 24546 AS THIS IS THE LAN PORT")]
         public int port = 24545;
         public string ServerName = "Default Transport Server";
-        private const int LANBroadcastPort = 24546;
+        public const int LANBroadcastPort = 24546;
 
         /// <summary>
         /// Debug bool used for in depth debugging
@@ -346,9 +336,6 @@ namespace NeonNetworking
             if (socketBroadcastThread != null)
                 socketBroadcastThread.Abort();
 
-            if (LANMatchThread != null)
-                LANMatchThread.Abort();
-
             if (socket != null)
                 socket.Close();
 
@@ -453,6 +440,16 @@ namespace NeonNetworking
                 }
             }
 
+            for (int i = 0; i < MatchManager.pendingMatchData.Count; i++)
+            {
+                MatchData match;
+
+                if (MatchManager.pendingMatchData.TryDequeue(out match))
+                {
+                    OnMatchRecieve(match);
+                }
+            }
+
             unscaledTimeThreaded = Time.unscaledTime;
 
             #if !UNITY_SERVER
@@ -502,13 +499,12 @@ namespace NeonNetworking
 
             else if (Input.GetKeyDown(KeyCode.Alpha5) && isServer)
             {
-                CancelInvoke("BroadcastMatch");
-                InvokeRepeating("BroadcastMatch", 0, 0.5f);
+                MatchManager.StartMatchBroadcast();
             }
 
             else if (Input.GetKeyDown(KeyCode.Alpha6) && !isServer)
             {
-                RecieveMatchBroadcast();
+                MatchManager.StartLANMatchRecieve();
             }
             #endif
         }
@@ -530,7 +526,6 @@ namespace NeonNetworking
                 return;
             }
 
-            recievingMatch = false;
             isQuitting = false;
 
             netObjects = new List<NetworkObject>();
@@ -584,7 +579,6 @@ namespace NeonNetworking
                 return;
             }
 
-            recievingMatch = false;
             isQuitting = false;
 
             netObjects = new List<NetworkObject>();
@@ -630,92 +624,6 @@ namespace NeonNetworking
         }
         #endregion
 
-        #region Matchmaking
-        /// <summary>
-        /// Used when we want match data from available servers
-        /// </summary>
-        /// <param name="target">Target we want match data </param>
-        public void RecieveMatches(EndPoint[] targets)//Note: this will throw an error if we are not connected and return if we are connected, FIX ME
-        {
-            if (!isQuitting)
-            {
-                Debug.LogWarning("Cannot recieve matches whilst connected");
-                return;
-            }
-
-            foreach (EndPoint e in targets)
-            {
-                Send("MATCHREQUEST", e);
-            }
-
-            Invoke("RequestTimeout", MatchRequestTimeout);
-        }
-
-        void RequestTimeout()
-        {
-            recievingMatch = false;
-        }
-
-        //Todo, make broadcast match invoke itself automatically so you don't have to InvokeRepeating() it
-        /// <summary>
-        /// Used to broadcast current match if there is one
-        /// </summary>
-        public void BroadcastMatch()
-        {
-            if (isQuitting)
-            {
-                Debug.LogWarning("Cannot broadcast a match when there is no match");
-                return;
-            }
-
-            else if (!isServer)
-            {
-                Debug.LogError("Cannot broadcast a match when you're a client");
-                return;
-            }
-
-            else if (highDebug)
-                Debug.LogWarning("Match broadcast");
-
-
-            if (LANMatchSocket == null)
-                LANMatchSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-
-            LANMatchSocket.EnableBroadcast = true;
-
-            MatchData match = new MatchData
-            {
-                MatchName = ServerName,
-                PlayerCount = connectedClients.Count
-            };
-
-            IPEndPoint p = new IPEndPoint(IPAddress.Broadcast, LANBroadcastPort);
-            Send(match, p, SendMethod.MatchSocketThreaded);
-        }
-
-        public void RecieveMatchBroadcast()
-        {
-            LANMatchSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-            LANMatchSocket.EnableBroadcast = true;
-
-            IPEndPoint p = new IPEndPoint(IPAddress.Any, LANBroadcastPort);
-
-            try
-            {
-                LANMatchSocket.Bind(p);
-            }
-
-            catch (Exception e)
-            {
-                string error = "Unable to bind to recieve LAN broadcast messages, is there another instance of a broadcasting game running?";
-                throw new InvalidOperationException(error);
-            }
-
-
-            RecieveLANMatches(); //TODO: Move match making to anothe script
-            //Recieve();
-        }
-        #endregion
 
         #region Send and Recieve data functions
         /// <summary>
@@ -792,20 +700,6 @@ namespace NeonNetworking
                     socketSendThread.Start();
                     break;
 
-                case SendMethod.MatchSocketThreaded:
-                    if (msg.GetType() != typeof(MatchData))
-                        throw new ArgumentException("Cannot send data other than match data over match socket and thread");
-
-                    if (LANMatchSocket == null)
-                    {
-                        LANMatchSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-                        LANMatchSocket.EnableBroadcast = true;
-                    }
-
-                    LANMatchThread = new Thread(() => ThreadedMatchSend(msg, target));
-                    LANMatchThread.Start();
-                    break;
-
                 default:
                     string error = "Send input invalid enum selection: " + method;
                     throw new NotImplementedException(error);
@@ -846,35 +740,7 @@ namespace NeonNetworking
             Debug.LogWarning("Threaded send end");
         }
 
-        /// <summary>
-        /// Internal method used to serialize and send match messages on another thread
-        /// </summary>
-        /// <param name="msg">Match to send</param>
-        /// <param name="target">Target to send message to</param>
-        private void ThreadedMatchSend(object msg, EndPoint target)
-        {
-            if (highDebug)
-                Debug.LogWarning("Threaded match send start");
-
-            byte[] packet;
-
-            try
-            {
-                packet = prepSend(msg);
-            }
-
-            catch (Exception ex)
-            {
-                string message = "Recieved exception from prepSend: " + ex.ToString();
-                Debug.LogError(message + ", MSG: " + msg);
-                throw new Exception(message);
-            }
-
-            LANMatchSocket.SendTo(packet, target);
-
-            if (highDebug)
-                Debug.LogWarning("Threaded match send end");
-        }
+        
 
         /// <summary>
         /// Broadcast function for server
@@ -1342,38 +1208,18 @@ namespace NeonNetworking
                         Debug.Log("MATCH DATA RECIEVED: " + matchData.MatchName);
                         eventRec = true;
 
-                        if (!isServer && (recievingMatch || isMatchBroadcasting))
-                        {
-                            matchData.sender = e.RemoteEndPoint;
-                            OnMatchRecieve(matchData);
-                            return;
-                        }
-
-                        else
-                        {
-                            Recieve();
-                            Debug.LogWarning("Recieved match data when we didn't expect it");
-                            return;
-                        }
+                        Recieve();
+                        Debug.LogWarning("Recieved match data when we didn't expect it");
                     }
                     catch (Exception ex)
                     {
                         Debug.LogError("Caught exception with deserialize: " + ex);
                         message = "CORRUPT";
 
-                        if (recievingMatch || isMatchBroadcasting)
-                        {
-                            recievingMatch = false;
-                            return;
-                        }
-
-                        else
-                        {
-                            Recieve();
-                            Debug.LogWarning("Recieved match data when we didn't expect it");
-                            return;
-                        }
+                        Recieve();
+                        Debug.LogWarning("Recieved match data when we didn't expect it");
                     }
+                    break;
 
                 default:
                     Debug.LogError("Object recieved has no valid type");

@@ -327,8 +327,11 @@ MonoBehaviour:
   playerPrefab: {fileID: 3647072668365323484, guid: b06d1449f283a8e4cb83f46a2db33f9a,
     type: 3}
   serverLastMsgTime: 0
+  MatchRequestTimeout: 10
   simulatedLag: 0
   IP: localhost
+  port: 24545
+  ServerName: Gamer server
   highDebug: 1
   platform: {fileID: 1431208501}
   noConn: {fileID: 2100000, guid: ded7c2accc94db346bd1904ba8b613c3, type: 2}

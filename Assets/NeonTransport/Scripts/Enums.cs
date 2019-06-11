@@ -37,10 +37,6 @@
         /// <summary>
         /// Send data on another thread
         /// </summary>
-        Threaded,
-        /// <summary>
-        /// Send match data on match specific thread socket and thread over LAN
-        /// </summary>
-        MatchSocketThreaded
+        Threaded
     }
 }
