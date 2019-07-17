@@ -10,6 +10,7 @@ using System.Globalization;
 using System.Collections.Concurrent;
 using NeonNetworking.DataTypes;
 using NeonNetworking.Enums;
+using System.Linq;
 
 namespace NeonNetworking
 {
@@ -29,14 +30,19 @@ namespace NeonNetworking
         public Thread mainThread { get; private set; }
         public EndPoint clientConnection;
         public float serverLastMsgTime;
-        public List<Client> connectedClients { get; private set; }
-        public List<Client> pendingDisconnects { get; private set; }
+        /// <summary>
+        /// Connected clients list, only available for server
+        /// </summary>
+        public List<Client> connectedClients { get; private set; } 
+        //public List<Client> pendingDisconnects { get; private set; }
         public List<NetworkObject> netObjects { get; private set; }
         public bool isServer { get; private set; } = false;
         public bool isQuitting { get; private set; } = true;
         private volatile bool _IsListeningVar = false;
         private bool pendingData = false;
         private EndPoint targetEnd;
+
+        private const string connectionDenied = "Conn Denied";
 
         //private bool recievingMatch = false;
         public float MatchRequestTimeout = 10;
@@ -141,6 +147,16 @@ namespace NeonNetworking
             if (highDebug)
                 Debug.Log("SERIALIZING TYPE: " + msgType + " MSG: " + msg);
 
+            //Reverse lookup message type enum
+            MessageType type = TypeDict.dict.FirstOrDefault(x => x.Value == msgType).Key;
+
+            packet = Serializer.Serialize(msg);
+            size = packet.Length;
+            Array.Resize(ref packet, 1024);
+            packet[1019] = (byte)type;
+
+            #region old switch
+            /*
             switch (msg)
             {
                 case var expression when msgType == typeof(string): //String serialiation
@@ -231,6 +247,8 @@ namespace NeonNetworking
                     throw new InvalidOperationException("Given type is not supported");
 
             }
+            */
+            #endregion
 
             switch (size)
             {
@@ -547,7 +565,7 @@ namespace NeonNetworking
             isQuitting = false;
 
             netObjects = new List<NetworkObject>();
-            pendingDisconnects = new List<Client>();
+            //pendingDisconnects = new List<Client>();
             connectedClients = new List<Client>();
             currentMsgs = new ConcurrentQueue<MsgEvent>();
             disClientEvents = new ConcurrentQueue<Client>();
@@ -600,7 +618,7 @@ namespace NeonNetworking
             isQuitting = false;
 
             netObjects = new List<NetworkObject>();
-            pendingDisconnects = new List<Client>();
+            //pendingDisconnects = new List<Client>();
             connectedClients = new List<Client>();
             currentMsgs = new ConcurrentQueue<MsgEvent>();
             disClientEvents = new ConcurrentQueue<Client>();
@@ -661,7 +679,7 @@ namespace NeonNetworking
             pendingData = true;
 
             if (highDebug)
-                Debug.Log("SENDING");
+                Debug.Log("SENDING: " + msg);
 
             if (target == null)
             {
@@ -887,7 +905,226 @@ namespace NeonNetworking
 
             byte type = data[1019];
             Array.Resize(ref data, targetLength);
+            Type recType = TypeDict.dict[(MessageType)type];
 
+            Debug.LogWarning("TYPE: " + recType);
+
+            try
+            {
+                message = Serializer.DeSerialize(recType, data);
+
+                if (highDebug)
+                    Debug.Log("MESSAGE RECIEVED: (" + message + ")");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("Caught exception with deserialize: " + ex);
+                message = "CORRUPT";
+            }
+
+            switch((MessageType)type)
+            {
+                #region ServerMessage
+                case MessageType.ServerMessage:
+                    ServerMessage sMsg = (ServerMessage)message;
+                    eventRec = true;
+
+                    if (isServer)
+                    {
+                        switch (sMsg.msgType)
+                        {
+                            case ServerMsgType.ConnectRequestEvent:
+                                AddConnection(e.RemoteEndPoint);
+                                break;
+
+                            case ServerMsgType.ConnectAcceptEvent:
+                                Debug.LogWarning("Recieved connection accept event on server");
+                                break;
+
+                            case ServerMsgType.ClientDisconnectEvent:
+                                Debug.LogWarning("CLIENT DISCONNECTED: DISCONNECT " + e.RemoteEndPoint.ToString());
+                                DisconnectClient(e.RemoteEndPoint);
+                                break;
+
+                            case ServerMsgType.PingEvent:
+                                ServerMessage m = new ServerMessage { msgType = ServerMsgType.PongEvent };
+                                Send(m, e.RemoteEndPoint);
+                                break;
+
+                            case ServerMsgType.PongEvent:
+                                Client c = connectedClients.Find(i => i.endPoint.ToString() == e.RemoteEndPoint.ToString());
+
+                                if (c != null)
+                                {
+                                    c.ping = 1000 * (unscaledTimeThreaded - c.pingMsgStartTime);
+                                }
+
+                                else
+                                    Debug.LogWarning("Recieved ping from non connected client");
+
+                                eventRec = true;
+                                break;
+
+                            case ServerMsgType.CCEvent:
+                                ServerMessage sm3 = new ServerMessage { msgType = ServerMsgType.CCAliveEvent };
+                                Send(sm3, e.RemoteEndPoint);
+                                break;
+
+                            case ServerMsgType.CCAliveEvent:
+                                Debug.Log("CONNECTION IS ALIVE");
+
+                                Client targetClient = connectedClients.Find(i => i.endPoint.Equals(e.RemoteEndPoint));
+
+                                if (targetClient != null)
+                                {
+                                    targetClient.lastReplyRec = 0;
+                                }
+
+                                eventRec = true;
+                                break;
+
+                            case ServerMsgType.MatchRequestEvent:
+                                MatchData match = OnMatchRequest();
+
+                                if (match != null)
+                                    Send(match, e.RemoteEndPoint);
+
+                                else
+                                    Debug.LogWarning("Match data returned is null, sending no data");
+                                break;
+
+                            default:
+                                string error = "Recieved not implemented enumeration on server message: " + sMsg.msgType;
+                                throw new NotImplementedException(error);
+                        }
+                    }
+
+                    else
+                    {
+                        switch (sMsg.msgType)
+                        {
+                            case ServerMsgType.ConnectRequestEvent:
+                                Debug.LogWarning("Recieved match request on client");
+                                break;
+
+                            case ServerMsgType.ConnectAcceptEvent:
+                                if (sMsg.ID == connectionDenied || string.IsNullOrEmpty(sMsg.ID))
+                                {
+                                    Debug.LogWarning("Connection has been denied or failed");
+                                    break;
+                                }
+
+                                AddConnection(e.RemoteEndPoint);
+                                Debug.LogWarning("Setting ID");
+                                localClientID = sMsg.ID;
+                                break;
+
+                            case ServerMsgType.ClientDisconnectEvent:
+                                Client client = new Client { ID = sMsg.ID};
+                                OnDisconnectClient(client);
+                                break;
+
+                            case ServerMsgType.PingEvent:
+                                ServerMessage sm2 = new ServerMessage { msgType = ServerMsgType.PongEvent };
+                                Send(sm2, e.RemoteEndPoint);
+                                break;
+
+                            case ServerMsgType.PongEvent:
+                                Ping = 1000 * (unscaledTimeThreaded - startPingTime);
+                                break;
+
+                            case ServerMsgType.CCEvent:
+                                ServerMessage sm1 = new ServerMessage { msgType = ServerMsgType.CCAliveEvent };
+                                Send(sm1, e.RemoteEndPoint);
+                                break;
+
+                            case ServerMsgType.CCAliveEvent:
+                                serverLastMsgTime = 0;
+                                break;
+
+                            case ServerMsgType.MatchRequestEvent:
+                                Debug.LogWarning("Recieved match request on client");
+                                break;
+
+                            case ServerMsgType.ConnectionDisconnectEvent:
+                                Debug.Log("You've been disconnected by the server");
+                                Disconnect();
+                                break;
+
+                            default:
+                                string error = "Recieved not implemented enumeration on server message (client): " + sMsg.msgType;
+                                throw new NotImplementedException(error);
+                        }
+                    }
+                    break;
+                #endregion
+
+                #region NetInstantiate
+                case MessageType.NetInstantiate:
+                    eventRec = true;
+                    NetInstantiate netInstantiate = (NetInstantiate)message;
+
+                    if (isServer)
+                    {
+                        Client targetClient = connectedClients.Find(i => i.endPoint.Equals(e.RemoteEndPoint));
+
+                        if (targetClient != null)
+                        {
+                            netInstantiate.senderID = targetClient.ID;
+                            netInstantiate.instanceID = Guid.NewGuid().ToString();
+                            pendingObjs.Enqueue(netInstantiate);
+                        }
+
+                        else
+                        {
+                            Debug.LogError("The client that sent this netInstantiate is not connected to the server, ignoring the message");
+                        }
+                    }
+
+                    else if (e.RemoteEndPoint.Equals(clientConnection))
+                    {
+                        pendingObjs.Enqueue(netInstantiate);
+                    }
+
+                    else
+                    {
+                        Debug.LogError("Recieved instantiate message from unestabilished connection");
+                    }
+                    break;
+                #endregion
+
+                #region NetDestroy
+                case MessageType.NetDestroy:
+                    eventRec = true;
+                    NetDestroyMsg netDestroy = (NetDestroyMsg)message;
+                    Debug.Log("NETDESTROY ID RECIEVED: " + netDestroy.IDToDestroy);
+
+                    if (isServer)
+                    {
+                        NetworkDestroy(netDestroy.IDToDestroy);
+                    }
+
+                    else
+                    {
+                        OnNetDestroy(netDestroy.IDToDestroy);
+                    }
+                    break;
+                #endregion
+
+                #region MatchData
+                case MessageType.MatchData:
+                    eventRec = true;
+                    MatchData matchData = (MatchData)message;
+                    Debug.Log("MATCH DATA RECIEVED: " + matchData.MatchName);
+
+                    Debug.LogWarning("Recieved match data when we didn't expect it");
+                    Recieve();
+                    return;
+                #endregion
+            }
+
+            #region old switch
+            /*
             switch (type)
             {
                 case (byte)MessageType.String:
@@ -1243,16 +1480,15 @@ namespace NeonNetworking
                     Debug.LogError("Object recieved has no valid type");
                     break;
             }
+            */
+            #endregion
 
             if (isServer)
             {
-                Client targetClient = connectedClients.Find(i => i.endPoint.ToString() == e.RemoteEndPoint.ToString());
-
+                Client targetClient = connectedClients.Find(i => i.endPoint.Equals(e.RemoteEndPoint));
+                
                 if (targetClient != null)
                     targetClient.lastReplyRec = 0;
-
-                else if ((string)message != "DISCONNECT")
-                    Debug.LogError("Recieved message from client that is not connected");
             }
 
             //Don't bother updating our network objects if we've recieved an event, we'll already have functions to handle these events
@@ -1263,6 +1499,7 @@ namespace NeonNetworking
                 currentMsgs.Enqueue(m);
                 Debug.LogWarning("Current msg set 2");
             }
+
 
             if (highDebug)
                 Debug.Log("RECIEVE FINISH");
@@ -1352,7 +1589,8 @@ namespace NeonNetworking
 
                 connectedClients.Add(conn);
 
-                ClientIDMsg iDMsg = new ClientIDMsg { ID = conn.ID, msg = "HELLO CLIENT"};
+                //ClientIDMsg iDMsg = new ClientIDMsg { ID = conn.ID, msg = "HELLO CLIENT"};
+                ServerMessage iDMsg = new ServerMessage { msgType = ServerMsgType.ConnectAcceptEvent, ID = conn.ID };
                 Send(iDMsg, connection);
 
                 List<string> sentIDs = new List<string>();
@@ -1396,8 +1634,11 @@ namespace NeonNetworking
                 if (c != null)
                 {
                     Debug.LogWarning("Connection selected");
-                    pendingDisconnects.Add(c);
-                    Send("DISCONNECT", connection);
+                    connectedClients.Remove(c);
+                    ServerMessage m = new ServerMessage { msgType = ServerMsgType.ConnectionDisconnectEvent };
+                    m.ID = c.ID;
+                    Send(m, connection);
+                    OnDisconnectClient(c);
                 }
 
                 else
@@ -1422,8 +1663,11 @@ namespace NeonNetworking
 
             if (isServer)
             {
-                //connectedClients.Remove(client);
-                pendingDisconnects.Add(client);
+                connectedClients.Remove(client);
+                ServerMessage m = new ServerMessage { msgType = ServerMsgType.ConnectionDisconnectEvent };
+                m.ID = client.ID;
+                Send(m, client.endPoint);
+                OnDisconnectClient(client);
             }
 
             else
@@ -1441,7 +1685,7 @@ namespace NeonNetworking
         {
             if (isServer)
             {
-                DisconnectEvent dc = new DisconnectEvent { client = client.endPoint.ToString() };
+                ServerMessage dc = new ServerMessage { msgType = ServerMsgType.ClientDisconnectEvent, ID = client.ID };
                 Broadcast(dc); //Broadcast disconnect
             }
 
@@ -1464,7 +1708,10 @@ namespace NeonNetworking
                 CancelInvoke("Ping");
 
                 if (!isQuitting)
-                    Broadcast("DISCONNECT");
+                {
+                    ServerMessage m = new ServerMessage { msgType = ServerMsgType.ConnectionDisconnectEvent };
+                    Broadcast(m);
+                }
 
                 if (pendingData)
                 {
@@ -1483,7 +1730,7 @@ namespace NeonNetworking
                     }
 
                     netObjects = null;
-                    pendingDisconnects = null;
+                    //pendingDisconnects = null;
                     pendingObjs = null;
                     connectedClients = null;
                     currentMsgs = null;
@@ -1501,7 +1748,10 @@ namespace NeonNetworking
                 CancelInvoke("Ping");
 
                 if (!isQuitting)
-                    Send("DISCONNECT", clientConnection);
+                {
+                    ServerMessage m = new ServerMessage { msgType = ServerMsgType.ClientDisconnectEvent };
+                    Send(m, clientConnection);
+                }
 
                 if (pendingData)
                 {
@@ -1523,7 +1773,7 @@ namespace NeonNetworking
                     NetExit();
 
                     netObjects = null;
-                    pendingDisconnects = null;
+                    //pendingDisconnects = null;
                     pendingObjs = null;
                     connectedClients = null;
                     clientConnection = null;
@@ -1698,18 +1948,10 @@ namespace NeonNetworking
 
                 else if (c.lastReplyRec > 100)
                 {
-                    Send("HELLO?", c.endPoint);
+                    ServerMessage msg = new ServerMessage { msgType = ServerMsgType.CCEvent };
+                    Send(msg, c.endPoint);
                 }
             }
-
-            foreach (Client client in pendingDisconnects)
-            {
-                connectedClients.Remove(client);
-                Send("DISCONNECT", client.endPoint);
-                OnDisconnectClient(client);
-            }
-
-            pendingDisconnects = new List<Client>();
 
             foreach (NetworkObject obj in netObjects)
             {
@@ -1741,7 +1983,8 @@ namespace NeonNetworking
             if (clientConnection == null)
             {
                 Debug.LogWarning("NO CONNECTION, ATTEMPTING CONNECT");
-                Send("HELLO SERVER", targetEnd);
+                ServerMessage msg = new ServerMessage { msgType = ServerMsgType.ConnectRequestEvent };
+                Send(msg, targetEnd);
                 return;
             }
 
@@ -1749,7 +1992,8 @@ namespace NeonNetworking
 
             if (serverLastMsgTime > 10 && serverLastMsgTime <= 20)
             {
-                Send("HELLO?", clientConnection);
+                ServerMessage msg = new ServerMessage { msgType = ServerMsgType.CCEvent };
+                Send(msg, clientConnection);
             }
 
             else if (serverLastMsgTime > 20)
@@ -1777,19 +2021,23 @@ namespace NeonNetworking
             if (isQuitting)
                 return;
 
+            Debug.Log("PING: " + Ping);
+
             if (isServer)
             {
                 foreach (Client c in connectedClients)
                 {
                     c.pingMsgStartTime = Time.unscaledTime;
-                    Send("PING", c.endPoint);
+                    ServerMessage msg = new ServerMessage { msgType = ServerMsgType.PingEvent };
+                    Send(msg, c.endPoint);
                 }
             }
 
             else if (clientConnection != null)
             {
                 startPingTime = Time.unscaledTime;
-                Send("PING", clientConnection);
+                ServerMessage msg = new ServerMessage { msgType = ServerMsgType.PingEvent };
+                Send(msg, clientConnection);
             }
 
             Invoke("PingFunc", 2);

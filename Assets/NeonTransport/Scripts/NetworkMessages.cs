@@ -1,4 +1,5 @@
 ﻿using System;
+using NeonNetworking.Enums;
 using OPS.Serialization.Attributes;
 
 namespace NeonNetworking.DataTypes
@@ -23,6 +24,7 @@ namespace NeonNetworking.DataTypes
         public float z;
     }
 
+    /* Client ID MSG
     [SerializeAbleClass]
     public class ClientIDMsg
     {
@@ -32,6 +34,7 @@ namespace NeonNetworking.DataTypes
         [SerializeAbleField(1)]
         public string ID;
     }
+    */
 
     [SerializeAbleClass]
     public class NetDestroyMsg
@@ -50,5 +53,15 @@ namespace NeonNetworking.DataTypes
         public int PlayerCount;
 
         public System.Net.EndPoint sender;
+    }
+
+    [SerializeAbleClass]
+    public class ServerMessage
+    {
+        [SerializeAbleField(0)]
+        public ServerMsgType msgType;
+
+        [SerializeAbleFieldOptional(1)]
+        public string ID;
     }
 }
