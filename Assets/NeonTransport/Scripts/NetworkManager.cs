@@ -34,7 +34,6 @@ namespace NeonNetworking
         /// Connected clients list, only available for server
         /// </summary>
         public List<Client> connectedClients { get; private set; } 
-        //public List<Client> pendingDisconnects { get; private set; }
         public List<NetworkObject> netObjects { get; private set; }
         public bool isServer { get; private set; } = false;
         public bool isQuitting { get; private set; } = true;
@@ -66,6 +65,9 @@ namespace NeonNetworking
         private volatile ConcurrentQueue<MsgEvent> currentMsgs;
         private volatile ConcurrentQueue<NetInstantiate> pendingObjs;
         private volatile ConcurrentQueue<ThreadedInstantiate> threadedInstantiate;
+        private volatile ConcurrentQueue<Client> pendingClientDisconnects;
+        private volatile ConcurrentQueue<EndPoint> pendingEndpointsDisconnects;
+
 
         public string IP = "localhost";
         [Tooltip("Port used in host / connection, CANNOT BE 24546 AS THIS IS THE LAN PORT")]
@@ -444,6 +446,36 @@ namespace NeonNetworking
                     }
                 }
 
+                for (int i = 0; i < pendingClientDisconnects.Count; i++)
+                {
+                    Client c = new Client();
+
+                    if (pendingClientDisconnects.TryDequeue(out c))
+                    {
+                        DisconnectClient(c);
+                    }
+
+                    else
+                    {
+                        Debug.LogWarning("Was unable to deque disconnect client event");
+                    }
+                }
+
+                for (int i = 0; i < pendingEndpointsDisconnects.Count; i++)
+                {
+                    EndPoint e; 
+
+                    if (pendingEndpointsDisconnects.TryDequeue(out e))
+                    {
+                        DisconnectClient(e);
+                    }
+
+                    else
+                    {
+                        Debug.LogWarning("Was unable to deque disconnect client event");
+                    }
+                }
+
                 for (int i = 0; i < threadedInstantiate.Count; i++)
                 {
                     ThreadedInstantiate instan = new ThreadedInstantiate();
@@ -568,7 +600,9 @@ namespace NeonNetworking
             //pendingDisconnects = new List<Client>();
             connectedClients = new List<Client>();
             currentMsgs = new ConcurrentQueue<MsgEvent>();
+            pendingClientDisconnects = new ConcurrentQueue<Client>();
             disClientEvents = new ConcurrentQueue<Client>();
+            pendingEndpointsDisconnects = new ConcurrentQueue<EndPoint>();
             pendingObjs = new ConcurrentQueue<NetInstantiate>();
             threadedInstantiate = new ConcurrentQueue<ThreadedInstantiate>();
 
@@ -621,7 +655,9 @@ namespace NeonNetworking
             //pendingDisconnects = new List<Client>();
             connectedClients = new List<Client>();
             currentMsgs = new ConcurrentQueue<MsgEvent>();
+            pendingClientDisconnects = new ConcurrentQueue<Client>();
             disClientEvents = new ConcurrentQueue<Client>();
+            pendingEndpointsDisconnects = new ConcurrentQueue<EndPoint>();
             pendingObjs = new ConcurrentQueue<NetInstantiate>();
             threadedInstantiate = new ConcurrentQueue<ThreadedInstantiate>();
 
@@ -1625,6 +1661,13 @@ namespace NeonNetworking
         /// <param name="connection">Endpoint to disconnect</param>
         public void DisconnectClient(EndPoint connection)
         {
+            if (Thread.CurrentThread.ManagedThreadId != mainThread.ManagedThreadId)
+            {
+                Debug.LogWarning("Called disconnect client on non main thread, queing for main thread");
+                pendingEndpointsDisconnects.Enqueue(connection);
+                return;
+            }
+
             Debug.Log("DISCONNECTING ENDPOINT");
 
             if (isServer)
@@ -1659,6 +1702,13 @@ namespace NeonNetworking
         /// <param name="client">Client to disconnect</param>
         public void DisconnectClient(Client client)
         {
+            if (Thread.CurrentThread.ManagedThreadId != mainThread.ManagedThreadId)
+            {
+                Debug.LogWarning("Called disconnect client on non main thread, queing for main thread");
+                pendingClientDisconnects.Enqueue(client);
+                return;
+            }
+
             Debug.Log("DISCONNECTING CLIENT");
 
             if (isServer)
@@ -1689,7 +1739,17 @@ namespace NeonNetworking
                 Broadcast(dc); //Broadcast disconnect
             }
 
-            disClientEvents.Enqueue(client);
+            if (Thread.CurrentThread.ManagedThreadId != mainThread.ManagedThreadId)
+            {
+                Debug.LogWarning("Called disconnect client on non main thread, queing for main thread");
+                disClientEvents.Enqueue(client);
+                return;
+            }
+
+            foreach (NetworkObject obj in netObjects)
+            {
+                obj.OnPlayerDisconnect(client);
+            }
         }
 
         /// <summary>
