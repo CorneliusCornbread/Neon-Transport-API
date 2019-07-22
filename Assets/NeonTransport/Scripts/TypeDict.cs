@@ -17,9 +17,7 @@ namespace NeonNetworking
             { MessageType.Bytes, typeof(byte[]) },
             { MessageType.Vector3, typeof(Vector3) },
             { MessageType.NetInstantiate, typeof(NetInstantiate) },
-            //{ MessageType.DisconnectEvent, typeof(DisconnectEvent) },
             { MessageType.PlayerData, typeof(PlayerData) },
-            //{ MessageType.ClientID, typeof(ClientIDMsg) },
             { MessageType.NetDestroy, typeof(NetDestroyMsg) },
             { MessageType.MatchData, typeof(MatchData) },
             { MessageType.ServerMessage, typeof(ServerMessage) }

@@ -10,7 +10,7 @@ namespace NeonNetworking.DataTypes
         public string objName;
 
         [SerializeAbleField(1)]
-        public string prefabName;
+        public int prefabID;
 
         [SerializeAbleField(2)]
         public Vector3 pos;

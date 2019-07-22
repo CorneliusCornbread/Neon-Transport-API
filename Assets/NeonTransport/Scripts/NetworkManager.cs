@@ -23,6 +23,7 @@ namespace NeonNetworking
 
         public static NetworkManager Instance { get; private set; }
         public static MatchManager MatchManager { get; private set; } = new MatchManager();
+        public NetworkPrefabs Prefabs;
         public Socket socket { get; private set; }
         public Thread socketRecieveThread { get; private set; }
         public Thread socketSendThread { get; private set; }
@@ -97,42 +98,39 @@ namespace NeonNetworking
         /// </summary>
         public float Ping { get; private set; }
 
-        public GameObject stringToPrefab(string objName)
+        public GameObject IDToPrefab(int id)
         {
             if (highDebug)
-                Debug.Log("STRING TO PREFAB");
+                Debug.Log("ID TO PREFAB");
 
-            switch (objName)
+            try
             {
-                case "playerPrefab":
-                    if (playerPrefab == null)
-                        throw new Exception("Prefab string: " + objName + " is not set");
+                GameObject obj = Prefabs.prefabDict[id];
+                return obj;
+            }
 
-                    return playerPrefab;
-
-                default:
-                    Debug.LogError("Prefab string recieved is not a valid type. Did you set it in the editor? Prefab string name: " + objName);
-                    return null;
+            catch
+            {
+                Debug.LogError("That id has no matching prefab: " + id);
+                return null;
             }
         }
 
-        public string prefabToString(GameObject prefab)
+        public int PrefabToID(GameObject prefab)
         {
             if (highDebug)
-                Debug.Log("PREFAB TO STRING");
+                Debug.Log("PREFAB TO ID");
 
-
-            switch (prefab)
+            try
             {
-                case var expression when prefab == playerPrefab:
-                    if (playerPrefab == null)
-                        throw new Exception("Prefab: " + prefab.name + " is not set");
+                int p = Prefabs.prefabDict.FirstOrDefault(x => x.Value == prefab).Key;
+                return p;
+            }
 
-                    return "playerPrefab";
-
-                default:
-                    Debug.LogError("Prefab recieved is not a valid type. Did you set it in the editor? Prefab name: " + prefab.name);
-                    return null;
+            catch
+            {
+                Debug.LogError("That prefab has no matching id: " + prefab.name);
+                return -1;
             }
         }
 
@@ -225,22 +223,7 @@ namespace NeonNetworking
             return new IPEndPoint(ip, port);
         }
 
-        #region Construction and cleanup
-        public NetworkManager()
-        {
-            if (NetworkManager.Instance != null)
-            {
-                Debug.LogError("Network Manager instance already exists, there's no reason to create another one");
-                Destroy(this);
-                return;
-            }
-
-            else
-            {
-                Instance = this;
-            }
-        }
-
+        #region Cleanup
         /// <summary>
         /// Function to clean up all of our threads and socket, is automatically run OnAplicationQuit(), OnDisable(), OnDestroy() and Disconnect(), but can be ran manually
         /// </summary>
@@ -282,6 +265,18 @@ namespace NeonNetworking
 
         private void Start()
         {
+            if (NetworkManager.Instance != null)
+            {
+                Debug.LogError("Network Manager instance already exists, there's no reason to create another one");
+                Destroy(this);
+                return;
+            }
+
+            else
+            {
+                Instance = this;
+            }
+
             DontDestroyOnLoad(gameObject);
 
             mainThread = Thread.CurrentThread;
@@ -290,6 +285,12 @@ namespace NeonNetworking
             //We have to let the program run in the background as we can run into problems with our threads.
             //That and we're on multiplayer, you never want to pause a client whilst in multiplayer.
             Application.runInBackground = true;
+
+            Prefabs.Initialize();
+
+            string n = playerPrefab.name;
+            //Instantiate(Prefabs.prefabDict[n]);
+
 
             #if UNITY_SERVER
             Host();
@@ -1430,7 +1431,7 @@ namespace NeonNetworking
 
             NetInstantiate netObj = new NetInstantiate
             {
-                prefabName = prefabToString(obj),
+                prefabID = PrefabToID(obj),
                 objName = obj.name,
                 pos = pos
             };
@@ -1502,7 +1503,7 @@ namespace NeonNetworking
             if (isServer)
                 Broadcast(obj);
 
-            GameObject targetObject = stringToPrefab(obj.prefabName);
+            GameObject targetObject = IDToPrefab(obj.prefabID);
             GameObject spawnedObj = Instantiate(targetObject);
 
             spawnedObj.transform.position = obj.pos;
