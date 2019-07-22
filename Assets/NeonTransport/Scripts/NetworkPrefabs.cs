@@ -31,7 +31,6 @@ namespace NeonNetworking
                 catch
                 {
                     prefabDict.Add(i, g);
-                    Debug.Log("Instance ID: " + i);
                 }
             }
         }
