@@ -16,11 +16,6 @@ namespace NeonNetworking
 {
     public class NetworkManager : MonoBehaviour
     {
-        #region Prefabs
-        public GameObject playerPrefab;
-
-        #endregion
-
         public static NetworkManager Instance { get; private set; }
         public static MatchManager MatchManager { get; private set; } = new MatchManager();
         public NetworkPrefabs Prefabs;
