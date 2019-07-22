@@ -16,6 +16,11 @@ namespace NeonNetworking
 {
     public class NetworkManager : MonoBehaviour
     {
+        #region TEST
+        public GameObject playerPrefab;
+
+        #endregion
+
         public static NetworkManager Instance { get; private set; }
         public static MatchManager MatchManager { get; private set; } = new MatchManager();
         public NetworkPrefabs Prefabs;
@@ -282,9 +287,6 @@ namespace NeonNetworking
             Application.runInBackground = true;
 
             Prefabs.Initialize();
-
-            string n = playerPrefab.name;
-            //Instantiate(Prefabs.prefabDict[n]);
 
 
             #if UNITY_SERVER
