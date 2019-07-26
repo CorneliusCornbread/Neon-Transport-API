@@ -68,6 +68,7 @@ namespace NeonNetworking
         private volatile ConcurrentQueue<ThreadedInstantiate> threadedInstantiate;
         private volatile ConcurrentQueue<Client> pendingClientDisconnects;
         private volatile ConcurrentQueue<EndPoint> pendingEndpointsDisconnects;
+        private volatile bool pendingLocalDisconnect = false;
 
 
         public string IP = "localhost";
@@ -446,10 +447,14 @@ namespace NeonNetworking
             {
                 Debug.Log("Disconnecting all clients");
 
-                foreach (Client c in connectedClients)
+                List<Client> temp = connectedClients;
+
+                foreach (Client c in temp)
                 {
                     DisconnectClient(c);
                 }
+
+                temp = null;
             }
 
             else if (Input.GetKeyDown(KeyCode.Alpha5) && isServer)
@@ -891,7 +896,7 @@ namespace NeonNetworking
                                 break;
 
                             case ServerMsgType.PongEvent:
-                                Client c = connectedClients.Find(i => i.endPoint.ToString() == e.RemoteEndPoint.ToString());
+                                Client c = connectedClients.Find(i => i.endPoint.Equals(e.RemoteEndPoint));
 
                                 if (c != null)
                                 {
@@ -1215,7 +1220,7 @@ namespace NeonNetworking
 
             if (isServer)
             {
-                Client c = connectedClients.Find(i => i.endPoint.ToString() == connection.ToString());
+                Client c = connectedClients.Find(i => i.endPoint.Equals(connection));
 
                 if (c != null)
                 {
@@ -1301,6 +1306,14 @@ namespace NeonNetworking
         /// </summary>
         public void Disconnect()
         {
+            if (Thread.CurrentThread.ManagedThreadId != mainThread.ManagedThreadId)
+            {
+                Debug.LogWarning("Called disconnect() on non main thread, queing for main thread");
+                pendingLocalDisconnect = true;
+                Debug.LogWarning("PEND: " + pendingLocalDisconnect);
+                return;
+            }
+
             Debug.Log("DISCONNECT");
 
             if (isServer)
@@ -1333,7 +1346,6 @@ namespace NeonNetworking
                     }
 
                     netObjects = null;
-                    //pendingDisconnects = null;
                     pendingObjs = null;
                     connectedClients = null;
                     currentMsgs = null;
@@ -1529,6 +1541,12 @@ namespace NeonNetworking
                 return;
             }
 
+            else if (pendingLocalDisconnect)
+            {
+                Disconnect();
+                //return;
+            }
+
             if (!_IsListeningVar)
             {
                 Debug.LogWarning("We're not listening, are we spending too much time OnRecieve?");
@@ -1581,6 +1599,17 @@ namespace NeonNetworking
                 return;
             }
 
+            else if (pendingLocalDisconnect)
+            {
+                Disconnect();
+                //return;
+            }
+
+            if (!_IsListeningVar)
+            {
+                Debug.LogWarning("We're not listening, are we spending too much time OnRecieve?");
+            }
+
             Debug.Log("CLIENT STEP");
 
             if (clientConnection == null)
@@ -1588,8 +1617,11 @@ namespace NeonNetworking
                 Debug.LogWarning("NO CONNECTION, ATTEMPTING CONNECT");
                 ServerMessage msg = new ServerMessage { msgType = ServerMsgType.ConnectRequestEvent };
                 Send(msg, targetEnd);
+                Invoke("ClientStep", 1);
                 return;
             }
+
+            Debug.Log("CLIENT STEP 1");
 
             serverLastMsgTime++;
 
@@ -1605,6 +1637,8 @@ namespace NeonNetworking
                 Debug.Log("DISCONNECT: TIMEOUT");
             }
 
+            Debug.Log("CLIENT STEP 2");
+
             foreach (NetworkObject obj in netObjects)
             {
                 if (obj.SyncObj() != null)
@@ -1612,6 +1646,8 @@ namespace NeonNetworking
                     Send(obj.SyncObj(), clientConnection);
                 }
             }
+
+            Debug.Log("CLIENT STEP 3");
 
             Invoke("ClientStep", 1);
         }
