@@ -53,7 +53,6 @@ namespace NeonNetworking
 
         void Start()
         {
-            Debug.Log("Adding Net Object");
             NetworkManager.Instance.netObjects.Add(this);
         }
 

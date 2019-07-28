@@ -60,7 +60,9 @@ namespace NeonNetworking
                 LANMatchSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             }
 
-            byte[] packet = man.prepSend("MATCHREQUEST");
+            ServerMessage request = new ServerMessage { msgType = ServerMsgType.MatchRequestEvent };
+
+            byte[] packet = man.prepSend(request);
 
             Parallel.ForEach(targets, e => MatchRequest(packet, e));
         }
@@ -76,10 +78,7 @@ namespace NeonNetworking
         public void StopMatchBroadcast()
         {
             if (!IsBroadcastingMatch)
-            {
-                Debug.LogWarning("Cannot stop match broadcast without starting match broadcast");
                 return;
-            }
 
             IsBroadcastingMatch = false;
             LANMatchSendThread.Abort();
@@ -91,27 +90,29 @@ namespace NeonNetworking
         /// </summary>
         public void StartMatchBroadcast()
         {
-            if (man.isQuitting)
+            if (man.highDebug)
             {
-                Debug.LogWarning("Cannot broadcast a match when there is no match");
-                return;
+                if (man.isQuitting)
+                {
+                    Debug.LogWarning("Cannot broadcast a match when there is no match");
+                    return;
+                }
+
+                else if (!man.isServer)
+                {
+                    Debug.LogError("Cannot broadcast a match when you're a client");
+                    return;
+                }
+
+                else if (IsBroadcastingMatch)
+                {
+                    Debug.LogError("We've already started broadcasting");
+                    return;
+                }
+
+                else
+                    Debug.LogWarning("Match broadcast");
             }
-
-            else if (!man.isServer)
-            {
-                Debug.LogError("Cannot broadcast a match when you're a client");
-                return;
-            }
-
-            else if (IsBroadcastingMatch)
-            {
-                Debug.LogError("We've already started broadcasting");
-                return;
-            }
-
-            else if (man.highDebug)
-                Debug.LogWarning("Match broadcast");
-
 
             LANMatchSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             LANMatchSocket.EnableBroadcast = true;
@@ -167,12 +168,10 @@ namespace NeonNetworking
         {
             if (!IsSearchingForMatches)
             {
-                Debug.LogWarning("Cannot stop search without a search to stop");
                 return;
             }
 
-            if (man.highDebug)
-                Debug.Log("Stop LAN listen");
+            Log("Stop LAN listen");
 
             IsSearchingForMatches = false;
             LANMatchRecieveThread.Abort();
@@ -203,7 +202,7 @@ namespace NeonNetworking
             {
                 string message = "Recieved exception from prepSend: " + ex.ToString();
                 Debug.LogError(message + ", MSG: " + match);
-                throw new Exception(message);
+                return;
             }
 
             LANMatchSocket.SendTo(packet, target);
@@ -245,14 +244,24 @@ namespace NeonNetworking
                     MatchData match = Serializer.DeSerialize<MatchData>(data);
                     pendingMatchData.Enqueue(match);
                 }
-                catch (Exception)
+                catch (Exception e)
                 {
-                    Debug.LogError("Serializer fail");
+                    Debug.LogError("Match making serialize error: " + e);
                 }
 
             }
 
             MatchRecieve();
+        }
+
+        /// <summary>
+        /// Internal log function
+        /// </summary>
+        /// <param name="msg"></param>
+        private void Log(object msg)
+        {
+            if (man.highDebug)
+                Debug.Log(msg);
         }
     }
 }
