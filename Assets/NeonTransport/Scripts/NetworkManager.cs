@@ -1536,7 +1536,9 @@ namespace NeonNetworking
 
             Log("SYNC STEP");
 
-            foreach (Client c in connectedClients)
+            List<Client> list = new List<Client>(connectedClients);
+
+            foreach (Client c in list)
             {
                 c.lastReplyRec++;
 
