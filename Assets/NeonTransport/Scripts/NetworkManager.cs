@@ -81,7 +81,13 @@ namespace NeonNetworking
         /// Debug bool used for in depth debugging
         /// </summary>
         [Tooltip("Debug bool used for in depth debugging.")]
-        public bool highDebug = true;
+        public bool highDebug = false;
+
+        /// <summary>
+        /// Used to time our message handling
+        /// </summary>
+        [Tooltip("Used to time our message handling")]
+        public bool timeRecieve = false;
         
         public Client serverData;
 
@@ -240,7 +246,25 @@ namespace NeonNetworking
                 socketBroadcastThread.Abort();
 
             if (socket != null)
-                socket.Close();
+            {
+                if (socket.Connected)
+                {
+                    try
+                    {
+                        socket.Disconnect(false);
+                    }
+
+                    catch
+                    {
+                        socket.Close();
+                    }
+                }
+
+                else
+                {
+                    socket.Close();
+                }
+            }
 
             MatchManager.StopMatchBroadcast();
 
@@ -344,7 +368,7 @@ namespace NeonNetworking
 
                 for (int i = 0; i < pendingClientDisconnects.Count; i++)
                 {
-                    Client c = new Client();
+                    Client c;
 
                     if (pendingClientDisconnects.TryDequeue(out c))
                     {
@@ -437,6 +461,7 @@ namespace NeonNetworking
             {
                 Debug.Log("Disconnecting all clients");
 
+                /*
                 List<Client> temp = new List<Client>(connectedClients);
 
                 foreach (Client c in temp)
@@ -445,6 +470,9 @@ namespace NeonNetworking
                 }
 
                 temp = null;
+                */
+
+                DisconnectClients(connectedClients.ToArray());
             }
 
             else if (Input.GetKeyDown(KeyCode.Alpha5) && isServer)
@@ -524,8 +552,7 @@ namespace NeonNetworking
 
             isServer = true;
 
-            socketRecieveThread = new Thread(Recieve);
-            socketRecieveThread.Start();
+            StartRecieve();
 
             Invoke("PingFunc", 2);
         }
@@ -584,8 +611,10 @@ namespace NeonNetworking
 
             targetEnd = tmpRemote;
 
-            socketRecieveThread = new Thread(Recieve);
-            socketRecieveThread.Start();
+            StartRecieve();
+
+            //socketRecieveThread = new Thread(Recieve);
+            //socketRecieveThread.Start();
 
             //Send("HELLO SERVER", tmpRemote);
 
@@ -763,7 +792,7 @@ namespace NeonNetworking
                     break;
 
                 case SendMethod.Threaded:
-                    socketBroadcastThread = new Thread(() => ThreadedBroadcast(msg));
+                    socketBroadcastThread = new Thread(() => ThreadedBroadcast(msg, connectedClients.ToArray()));
                     socketBroadcastThread.Start();
                     break;
             }
@@ -777,13 +806,18 @@ namespace NeonNetworking
         /// Internal threaded broadcast message
         /// </summary>
         /// <param name="msg">Object we want to serialize and send over the network</param>
-        private void ThreadedBroadcast(object msg)
+        private void ThreadedBroadcast(object msg, Client[] clients)
         {
             if (msg == null)
                 throw new ArgumentNullException("Cannot broadcast a null object");
 
             byte[] packet = prepSend(msg);
-            connectedClients.ForEach(item => socket.SendTo(packet, item.endPoint));
+            //connectedClients.ForEach(item => socket.SendTo(packet, item.endPoint));
+
+            foreach (Client c in clients)
+            {
+                socket.SendTo(packet, c.endPoint);
+            }
         }
 
         /// <summary>
@@ -797,38 +831,75 @@ namespace NeonNetworking
             pendingData = false;
         }
 
-        /// <summary>
-        /// On recieve async function, called when async recieve recieves data
-        /// </summary>
-        /// <param name="sender">Sender</param>
-        /// <param name="e">Event Args</param>
-        private void OnRecieve(object sender, SocketAsyncEventArgs e)
+        private void StartRecieve()
         {
-            if (isQuitting)
+            if (mainThread.ManagedThreadId == Thread.CurrentThread.ManagedThreadId)
             {
-                Log("Skipping recieve, as we're quitting");
+                LogWarning("START RECIEVE IS ON MAIN THREAD");
+                socketRecieveThread = new Thread(StartRecieve);
+                socketRecieveThread.Start();
                 return;
             }
 
+            while (!isQuitting)
+            {
+                Recieve();
+            }
+
+            Debug.LogWarning("Recieve loop has ended");
+        }
+
+        /// <summary>
+        /// Recieve function
+        /// </summary>
+        /// <param name="sender">Sender</param>
+        /// <param name="e">Event Args</param>
+        private void Recieve()
+        {
             if (mainThread.ManagedThreadId == Thread.CurrentThread.ManagedThreadId)
             {
-                Debug.LogWarning("ON RECIEVE IS ON MAIN THREAD");
+                Debug.LogWarning("RECIEVE IS ON MAIN THREAD");
+                return;
             }
 
             Log("ON REC START");
 
-            _IsListeningVar = false;
+            _IsListeningVar = true;
 
-            byte[] data = e.Buffer;
+            byte[] data = new byte[1024];
             object message = "none";
             bool eventRec = false;
+
+            IPEndPoint sender = new IPEndPoint(IPAddress.Any, 0); //Recieve from any 
+            EndPoint tmpRemote = (EndPoint)sender; //Convert IPEndPoint to EndPoint
+
+            if (isServer)
+            {
+                socket.ReceiveFrom(data, ref tmpRemote);
+            }
+
+            else if (socket.Connected)
+            {
+                socket.ReceiveFrom(data, ref tmpRemote);
+            }
+
+            else
+            {
+                return;
+            }
+
+            _IsListeningVar = false;
+
+            System.Diagnostics.Stopwatch recWatch = new System.Diagnostics.Stopwatch();
+
+            if (timeRecieve)
+                recWatch.Start();
 
             int targetLength = data[1020] + data[1021] + data[1022] + data[1023];
 
             if (targetLength == 0)
             {
-                Debug.LogWarning("Recieved an incomplete message from: " + e.RemoteEndPoint.ToString());
-                Recieve();
+                Debug.LogWarning("Recieved an incomplete message from: " + tmpRemote.ToString());
                 return;
             }
 
@@ -860,7 +931,7 @@ namespace NeonNetworking
                         switch (sMsg.msgType)
                         {
                             case ServerMsgType.ConnectRequestEvent:
-                                AddConnection(e.RemoteEndPoint);
+                                AddConnection(tmpRemote);
                                 break;
 
                             case ServerMsgType.ConnectAcceptEvent:
@@ -868,17 +939,19 @@ namespace NeonNetworking
                                 break;
 
                             case ServerMsgType.ClientDisconnectEvent:
-                                Log("CLIENT DISCONNECTED: DISCONNECT " + e.RemoteEndPoint.ToString());
-                                DisconnectClient(e.RemoteEndPoint);
+                                Log("CLIENT DISCONNECTED: DISCONNECT " + tmpRemote.ToString());
+                                DisconnectClient(tmpRemote);
                                 break;
 
                             case ServerMsgType.PingEvent:
                                 ServerMessage m = new ServerMessage { msgType = ServerMsgType.PongEvent };
-                                Send(m, e.RemoteEndPoint);
+                                Send(m, tmpRemote);
                                 break;
 
                             case ServerMsgType.PongEvent:
-                                Client c = connectedClients.Find(i => i.endPoint.Equals(e.RemoteEndPoint));
+                                List<Client> clients = new List<Client>(connectedClients);
+
+                                Client c = clients.Find(i => i.endPoint.Equals(tmpRemote));
 
                                 if (c != null)
                                 {
@@ -894,13 +967,15 @@ namespace NeonNetworking
 
                             case ServerMsgType.CCEvent:
                                 ServerMessage sm3 = new ServerMessage { msgType = ServerMsgType.CCAliveEvent };
-                                Send(sm3, e.RemoteEndPoint);
+                                Send(sm3, tmpRemote);
                                 break;
 
                             case ServerMsgType.CCAliveEvent:
                                 Log("CONNECTION IS ALIVE");
 
-                                Client targetClient = connectedClients.Find(i => i.endPoint.Equals(e.RemoteEndPoint));
+                                List<Client> clients2 = new List<Client>(connectedClients);
+
+                                Client targetClient = clients2.Find(i => i.endPoint.Equals(tmpRemote));
 
                                 if (targetClient != null)
                                 {
@@ -914,7 +989,7 @@ namespace NeonNetworking
                                 MatchData match = OnMatchRequest();
 
                                 if (match != null)
-                                    Send(match, e.RemoteEndPoint);
+                                    Send(match, tmpRemote);
 
                                 else
                                     Debug.LogWarning("Match data returned is null, sending no data");
@@ -941,7 +1016,7 @@ namespace NeonNetworking
                                     break;
                                 }
 
-                                AddConnection(e.RemoteEndPoint);
+                                AddConnection(tmpRemote);
                                 Log("Setting ID");
                                 localClientID = sMsg.ID;
                                 break;
@@ -953,7 +1028,7 @@ namespace NeonNetworking
 
                             case ServerMsgType.PingEvent:
                                 ServerMessage sm2 = new ServerMessage { msgType = ServerMsgType.PongEvent };
-                                Send(sm2, e.RemoteEndPoint);
+                                Send(sm2, tmpRemote);
                                 break;
 
                             case ServerMsgType.PongEvent:
@@ -963,7 +1038,7 @@ namespace NeonNetworking
 
                             case ServerMsgType.CCEvent:
                                 ServerMessage sm1 = new ServerMessage { msgType = ServerMsgType.CCAliveEvent };
-                                Send(sm1, e.RemoteEndPoint);
+                                Send(sm1, tmpRemote);
                                 break;
 
                             case ServerMsgType.CCAliveEvent:
@@ -994,7 +1069,9 @@ namespace NeonNetworking
 
                     if (isServer)
                     {
-                        Client targetClient = connectedClients.Find(i => i.endPoint.Equals(e.RemoteEndPoint));
+                        List<Client> clients = new List<Client>(connectedClients);
+
+                        Client targetClient = clients.Find(i => i.endPoint.Equals(tmpRemote));
 
                         if (targetClient != null)
                         {
@@ -1009,7 +1086,7 @@ namespace NeonNetworking
                         }
                     }
 
-                    else if (e.RemoteEndPoint.Equals(clientConnection))
+                    else if (tmpRemote.Equals(clientConnection))
                     {
                         pendingObjs.Enqueue(netInstantiate);
                     }
@@ -1046,14 +1123,15 @@ namespace NeonNetworking
                     Log("MATCH DATA RECIEVED: " + matchData.MatchName);
 
                     Debug.LogWarning("Recieved match data when we didn't expect it");
-                    Recieve();
                     return;
                 #endregion
             }
 
             if (isServer)
             {
-                Client targetClient = connectedClients.Find(i => i.endPoint.Equals(e.RemoteEndPoint));
+                List<Client> clients = new List<Client>(connectedClients);
+
+                Client targetClient = clients.Find(i => i.endPoint.Equals(tmpRemote));
                 
                 if (targetClient != null)
                     targetClient.lastReplyRec = 0;
@@ -1067,48 +1145,22 @@ namespace NeonNetworking
             //Don't bother updating our network objects if we've recieved an event, we'll already have functions to handle these events
             if (!eventRec)
             {
-                MsgEvent m = new MsgEvent { msg = message, end = e.RemoteEndPoint };
+                MsgEvent m = new MsgEvent { msg = message, end = tmpRemote };
                 currentMsgs.Enqueue(m);
             }
 
-
-            Log("RECIEVE FINISH");
-
-            Recieve();
-        }
-
-        /// <summary>
-        /// Recieve function to continually recieve data, either for server or client
-        /// </summary>
-        public void Recieve()
-        {
-            Log("START RECIEVE");
-
-            if (mainThread.ManagedThreadId == Thread.CurrentThread.ManagedThreadId)
+            if (timeRecieve)
             {
-                Debug.LogWarning("RECIEVE IS ON MAIN THREAD");
+                recWatch.Stop();
+                Debug.Log("RECIEVE FINISH, TIME: " + recWatch.ElapsedMilliseconds);
+                Debug.Log("MESSAGE RECIEVED: " + message.GetType());
+
+                if ((MessageType)type == MessageType.ServerMessage)
+                {
+                    ServerMessage m = (ServerMessage)message;
+                    Debug.Log("SVR MSG: " + m.msgType);
+                }
             }
-
-            //Setup variables to send information
-            int count = 1024;
-            int offset = 0;
-            byte[] buffer = new byte[count];
-
-            IPEndPoint sender = new IPEndPoint(IPAddress.Any, 0); //Recieve from any 
-            EndPoint tmpRemote = (EndPoint)(sender); //Convert IPEndPoint to EndPoint
-
-            //Arguments for async recieve
-            SocketAsyncEventArgs args = new SocketAsyncEventArgs();
-            args.SetBuffer(buffer, offset, count);
-            args.Completed += OnRecieve;
-            args.RemoteEndPoint = tmpRemote;
-
-            //We use a recieve async function to prevent it from freezing the main thread (and editor, lmao)
-            socket.ReceiveFromAsync(args);
-
-            //OnRecieve(null, args);
-
-            _IsListeningVar = true;
         }
         #endregion
 
@@ -1197,7 +1249,7 @@ namespace NeonNetworking
         {
             if (Thread.CurrentThread.ManagedThreadId != mainThread.ManagedThreadId)
             {
-                Debug.LogWarning("Called disconnect client on non main thread, queing for main thread");
+                Log("Called disconnect client on non main thread, queing for main thread");
                 pendingEndpointsDisconnects.Enqueue(connection);
                 return;
             }
@@ -1210,7 +1262,6 @@ namespace NeonNetworking
 
                 if (c != null)
                 {
-                    Debug.LogWarning("Connection selected");
                     connectedClients.Remove(c);
                     ServerMessage m = new ServerMessage { msgType = ServerMsgType.ConnectionDisconnectEvent };
                     m.ID = c.ID;
@@ -1220,7 +1271,7 @@ namespace NeonNetworking
 
                 else
                 {
-                    Debug.LogError("Input endpoint that is not connected");
+                    LogWarning("Input endpoint that is not connected");
                 }
             }
 
@@ -1257,6 +1308,30 @@ namespace NeonNetworking
             else
             {
                 Debug.LogError("Cannot call DisconnectClient() on a client");
+            }
+        }
+
+        /// <summary>
+        /// Disconnects multiple clients
+        /// </summary>
+        /// <param name="clients"></param>
+        public void DisconnectClients(Client[] clients)
+        {
+            if (Thread.CurrentThread.ManagedThreadId != mainThread.ManagedThreadId)
+            {
+                Log("Called disconnect clients on non main thread, queing for main thread");
+
+                foreach (Client c in clients)
+                {
+                    pendingClientDisconnects.Enqueue(c);
+                }
+
+                return;
+            }
+
+            foreach (Client c in clients)
+            {
+                DisconnectClient(c);
             }
         }
 
@@ -1596,6 +1671,7 @@ namespace NeonNetworking
             {
                 Log("NO CONNECTION, ATTEMPTING CONNECT");
                 ServerMessage msg = new ServerMessage { msgType = ServerMsgType.ConnectRequestEvent };
+                socket.Connect(targetEnd);
                 Send(msg, targetEnd);
                 Invoke("ClientStep", .25f);
                 return;
@@ -1637,7 +1713,9 @@ namespace NeonNetworking
 
             if (isServer)
             {
-                foreach (Client c in connectedClients)
+                List<Client> clients = new List<Client>(connectedClients);
+
+                foreach (Client c in clients)
                 {
                     c.pingTimer.Restart();
                     ServerMessage msg = new ServerMessage { msgType = ServerMsgType.PingEvent };
@@ -1658,11 +1736,21 @@ namespace NeonNetworking
         /// <summary>
         /// Internal log function
         /// </summary>
-        /// <param name="msg"></param>
+        /// <param name="msg">Message to debug</param>
         private void Log(object msg)
         {
             if (highDebug)
                 Debug.Log(msg);
+        }
+
+        /// <summary>
+        /// Internal log warning function
+        /// </summary>
+        /// <param name="msg">Message to debug</param>
+        private void LogWarning(object msg)
+        {
+            if (highDebug)
+                Debug.LogWarning(msg);
         }
     }
 }
