@@ -88,7 +88,7 @@ namespace NeonNetworking
             float i = Mathf.Pow(error, 2) * interpFactor;
             float targetInterp = Mathf.Clamp(i, minInterp, maxInterp);
 
-            interpPos.x = Mathf.Lerp(transform.position.x, targetPos.x, targetInterp);
+            interpPos.x = Mathf.Lerp(transform.position.x, targetPos.x, targetInterp); //Use Vector3.lerp instead
             interpPos.y = Mathf.Lerp(transform.position.y, targetPos.y, targetInterp);
             interpPos.z = Mathf.Lerp(transform.position.z, targetPos.z, targetInterp);
 
@@ -96,7 +96,7 @@ namespace NeonNetworking
             i = Mathf.Pow(error, 2) * interpFactor;
             targetInterp = Mathf.Clamp(i, minInterp, maxInterp);
 
-            interpScale.x = Mathf.Lerp(transform.localScale.x, targetScale.x, targetInterp);
+            interpScale.x = Mathf.Lerp(transform.localScale.x, targetScale.x, targetInterp); //Use Vector3.lerp instead
             interpScale.y = Mathf.Lerp(transform.localScale.y, targetScale.y, targetInterp);
             interpScale.z = Mathf.Lerp(transform.localScale.z, targetScale.z, targetInterp);
 
@@ -104,7 +104,7 @@ namespace NeonNetworking
             i = Mathf.Pow(error, 2) * interpFactor;
             targetInterp = Mathf.Clamp(i, minInterp, maxInterp);
 
-            interpRot.x = Mathf.Lerp(transform.rotation.x, targetRot.x, targetInterp);
+            interpRot.x = Mathf.Lerp(transform.rotation.x, targetRot.x, targetInterp); //Use Vector4.lerp instead
             interpRot.y = Mathf.Lerp(transform.rotation.y, targetRot.y, targetInterp);
             interpRot.z = Mathf.Lerp(transform.rotation.z, targetRot.z, targetInterp);
             interpRot.w = Mathf.Lerp(transform.rotation.w, targetRot.w, targetInterp);
