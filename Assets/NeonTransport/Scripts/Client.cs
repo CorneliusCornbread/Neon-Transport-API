@@ -1,8 +1,10 @@
 ﻿using System.Net;
 using System.Diagnostics;
+using System;
 
 namespace NeonNetworking
 {
+    [Serializable]
     public class Client
     {
         public volatile float lastReplyRec = 0;

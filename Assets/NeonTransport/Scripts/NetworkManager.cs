@@ -34,7 +34,26 @@ namespace NeonNetworking
         /// <summary>
         /// Connected clients list, only available for server
         /// </summary>
-        public List<Client> connectedClients { get; private set; } 
+        public List<Client> connectedClients
+        {
+            get
+            {
+                lock (conClientsLock)
+                {
+                    return prvConClients;
+                }
+            }
+
+            private set
+            {
+                lock (conClientsLock)
+                {
+                    prvConClients = value;
+                }
+            }
+        }
+        private List<Client> prvConClients;
+        private readonly object conClientsLock = new object();
         public List<NetworkObject> netObjects { get; private set; }
         public bool isServer { get; private set; } = false;
         public bool isQuitting { get; private set; } = true;
@@ -46,6 +65,7 @@ namespace NeonNetworking
 
         //private bool recievingMatch = false;
         public float MatchRequestTimeout = 10;
+
         public bool IsMatchBroadcasting
         {
             get
@@ -96,6 +116,10 @@ namespace NeonNetworking
         public Material noConn;
         public Material server;
         public Material client;
+
+        #if UNITY_EDITOR
+        public Client[] clArray;
+        #endif
 
         public volatile System.Diagnostics.Stopwatch clientPingWatch = new System.Diagnostics.Stopwatch();
 
@@ -318,6 +342,10 @@ namespace NeonNetworking
         {
             if (!isQuitting)
             {
+                #if UNITY_EDITOR
+                clArray = connectedClients.ToArray();
+                #endif
+
                 for (int i = 0; i < pendingObjs.Count; i++)
                 {
                     NetInstantiate obj = new NetInstantiate();
@@ -811,7 +839,18 @@ namespace NeonNetworking
             if (msg == null)
                 throw new ArgumentNullException("Cannot broadcast a null object");
 
-            byte[] packet = prepSend(msg);
+            byte[] packet;
+
+            try
+            {
+                packet = prepSend(msg);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("THREADED BROADCAST CAUGHT PREPSEND ERROR: " + e);
+                return;
+            }
+
             //connectedClients.ForEach(item => socket.SendTo(packet, item.endPoint));
 
             foreach (Client c in clients)
@@ -949,9 +988,7 @@ namespace NeonNetworking
                                 break;
 
                             case ServerMsgType.PongEvent:
-                                List<Client> clients = new List<Client>(connectedClients);
-
-                                Client c = clients.Find(i => i.endPoint.Equals(tmpRemote));
+                                Client c = connectedClients.Find(i => i.endPoint.Equals(tmpRemote));
 
                                 if (c != null)
                                 {
@@ -973,9 +1010,7 @@ namespace NeonNetworking
                             case ServerMsgType.CCAliveEvent:
                                 Log("CONNECTION IS ALIVE");
 
-                                List<Client> clients2 = new List<Client>(connectedClients);
-
-                                Client targetClient = clients2.Find(i => i.endPoint.Equals(tmpRemote));
+                                Client targetClient = connectedClients.Find(i => i.endPoint.Equals(tmpRemote));
 
                                 if (targetClient != null)
                                 {
@@ -1069,9 +1104,7 @@ namespace NeonNetworking
 
                     if (isServer)
                     {
-                        List<Client> clients = new List<Client>(connectedClients);
-
-                        Client targetClient = clients.Find(i => i.endPoint.Equals(tmpRemote));
+                        Client targetClient = connectedClients.Find(i => i.endPoint.Equals(tmpRemote));
 
                         if (targetClient != null)
                         {
@@ -1129,10 +1162,8 @@ namespace NeonNetworking
 
             if (isServer)
             {
-                List<Client> clients = new List<Client>(connectedClients);
+                Client targetClient = connectedClients.Find(i => i.endPoint.Equals(tmpRemote));
 
-                Client targetClient = clients.Find(i => i.endPoint.Equals(tmpRemote));
-                
                 if (targetClient != null)
                     targetClient.lastReplyRec = 0;
             }
@@ -1611,9 +1642,9 @@ namespace NeonNetworking
 
             Log("SYNC STEP");
 
-            List<Client> list = new List<Client>(connectedClients);
+            List<Client> clients = new List<Client>(connectedClients);
 
-            foreach (Client c in list)
+            foreach (Client c in clients)
             {
                 c.lastReplyRec++;
 
@@ -1713,9 +1744,7 @@ namespace NeonNetworking
 
             if (isServer)
             {
-                List<Client> clients = new List<Client>(connectedClients);
-
-                foreach (Client c in clients)
+                foreach (Client c in connectedClients)
                 {
                     c.pingTimer.Restart();
                     ServerMessage msg = new ServerMessage { msgType = ServerMsgType.PingEvent };
