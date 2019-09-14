@@ -167,6 +167,10 @@ namespace NeonNetworking
             if (msg == null)
                 throw new ArgumentNullException("Cannot input null prepsend message");
 
+            //TODO: REMOVE ME LATER, DEBUG SHIT FOR TIMING SERIALIZATION
+            System.Diagnostics.Stopwatch stopwatch = new System.Diagnostics.Stopwatch();
+            stopwatch.Start();
+
             byte[] packet = new byte[1024];
             int size = 0;
 
@@ -210,6 +214,10 @@ namespace NeonNetworking
                     string exception = "Packet size max is 1019, length is: " + size + ". Consider using compression if possible";
                     throw new Exception(exception);
             }
+
+            //TODO: REMOVE ME LATER, DEBUG SHIT FOR TIMING SERIALIZATION
+            stopwatch.Stop();
+            Debug.Log("TIME: " + 1000 * ((float)stopwatch.ElapsedTicks / System.Diagnostics.Stopwatch.Frequency));
 
             return packet;
         }
