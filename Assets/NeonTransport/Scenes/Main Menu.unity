@@ -468,5 +468,10 @@ PrefabInstance:
       propertyPath: timeRecieve
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 8952766436894927640, guid: a43ae58fedaa642468140aa03a8b1585,
+        type: 3}
+      propertyPath: timePrepSend
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: a43ae58fedaa642468140aa03a8b1585, type: 3}

@@ -104,10 +104,16 @@ namespace NeonNetworking
         public bool highDebug = false;
 
         /// <summary>
-        /// Used to time our message handling
+        /// Used to time our message handling in milliseconds
         /// </summary>
-        [Tooltip("Used to time our message handling")]
+        [Tooltip("Used to time our message handling in milliseconds")]
         public bool timeRecieve = false;
+
+        /// <summary>
+        /// Used to time our serialization in milliseconds
+        /// </summary>
+        [Tooltip("Used to time our serialization in milliseconds")]
+        public bool timePrepSend = false;
         
         public Client serverData;
 
@@ -167,9 +173,12 @@ namespace NeonNetworking
             if (msg == null)
                 throw new ArgumentNullException("Cannot input null prepsend message");
 
-            //TODO: REMOVE ME LATER, DEBUG SHIT FOR TIMING SERIALIZATION
             System.Diagnostics.Stopwatch stopwatch = new System.Diagnostics.Stopwatch();
-            stopwatch.Start();
+
+            if (timePrepSend)
+            {
+                stopwatch.Start();
+            }
 
             byte[] packet = new byte[1024];
             int size = 0;
@@ -211,13 +220,21 @@ namespace NeonNetworking
                     break;
 
                 default:
+                    if (timePrepSend)
+                    {
+                        stopwatch.Stop();
+                        Debug.Log("<color=#4295f5>prepSend: " + ((float)stopwatch.ElapsedTicks / System.Diagnostics.Stopwatch.Frequency) + "</color>");
+                    }
+
                     string exception = "Packet size max is 1019, length is: " + size + ". Consider using compression if possible";
                     throw new Exception(exception);
             }
 
-            //TODO: REMOVE ME LATER, DEBUG SHIT FOR TIMING SERIALIZATION
-            stopwatch.Stop();
-            Debug.Log("TIME: " + 1000 * ((float)stopwatch.ElapsedTicks / System.Diagnostics.Stopwatch.Frequency));
+            if (timePrepSend)
+            {
+                stopwatch.Stop();
+                Debug.Log("<color=#4295f5>prepSend: " + ((float)stopwatch.ElapsedTicks / System.Diagnostics.Stopwatch.Frequency) + "</color>");
+            }
 
             return packet;
         }
@@ -260,7 +277,7 @@ namespace NeonNetworking
         /// </summary>
         public void NetExit()
         {
-            Debug.Log("Net Exit");
+            Debug.Log("<color=red>Net Exit</color>");
 
             isQuitting = true;
 
@@ -920,15 +937,17 @@ namespace NeonNetworking
             IPEndPoint sender = new IPEndPoint(IPAddress.Any, 0); //Recieve from any 
             EndPoint tmpRemote = (EndPoint)sender; //Convert IPEndPoint to EndPoint
 
-            if (isServer)
+            if (isServer || socket.Connected)
             {
                 socket.ReceiveFrom(data, ref tmpRemote);
             }
 
+            /* removed and replaced with or in first if statement
             else if (socket.Connected)
             {
                 socket.ReceiveFrom(data, ref tmpRemote);
             }
+            */
 
             else
             {
@@ -946,7 +965,15 @@ namespace NeonNetworking
 
             if (targetLength == 0)
             {
-                Debug.LogWarning("Recieved an incomplete message from: " + tmpRemote.ToString());
+                Debug.LogWarning("<color=yellow>Recieved an incomplete message from: " + tmpRemote.ToString() + "</color>");
+
+                if (timeRecieve)
+                {
+                    recWatch.Stop();
+                    Debug.Log("<color=#4295f5>RECIEVE FINISH, TIME: " + 1000 * ((float)recWatch.ElapsedTicks / System.Diagnostics.Stopwatch.Frequency) + "</color>");
+                    Debug.Log("<color=#4295f5>MESSAGE RECIEVED: " + message.GetType() + "</color>");
+                }
+
                 return;
             }
 
@@ -962,7 +989,7 @@ namespace NeonNetworking
             }
             catch (Exception ex)
             {
-                Debug.LogError("Caught exception with deserialize: " + ex);
+                Debug.LogError("<color=red>Caught exception with deserialize: " + ex + "</color>");
                 message = "CORRUPT";
             }
 
@@ -982,7 +1009,7 @@ namespace NeonNetworking
                                 break;
 
                             case ServerMsgType.ConnectAcceptEvent:
-                                Debug.LogWarning("Recieved connection accept event on server");
+                                Debug.LogWarning("<color=yellow>Recieved connection accept event on server</color>");
                                 break;
 
                             case ServerMsgType.ClientDisconnectEvent:
@@ -1005,7 +1032,7 @@ namespace NeonNetworking
                                 }
 
                                 else
-                                    Debug.LogWarning("Recieved ping from non connected client");
+                                    Debug.LogWarning("<color=yellow>Recieved ping from non connected client</color>");
 
                                 eventRec = true;
                                 break;
@@ -1035,7 +1062,7 @@ namespace NeonNetworking
                                     Send(match, tmpRemote);
 
                                 else
-                                    Debug.LogWarning("Match data returned is null, sending no data");
+                                    Debug.LogWarning("<color=yellow>Match data returned is null, sending no data</color>");
                                 break;
 
                             default:
@@ -1049,7 +1076,7 @@ namespace NeonNetworking
                         switch (sMsg.msgType)
                         {
                             case ServerMsgType.ConnectRequestEvent:
-                                Debug.LogWarning("Recieved match request on client");
+                                Debug.LogWarning("<color=yellow>Recieved match request on client</color>");
                                 break;
 
                             case ServerMsgType.ConnectAcceptEvent:
@@ -1089,7 +1116,7 @@ namespace NeonNetworking
                                 break;
 
                             case ServerMsgType.MatchRequestEvent:
-                                Debug.LogWarning("Recieved match request on client");
+                                Debug.LogWarning("<color=yellow>Recieved match request on client</color>");
                                 break;
 
                             case ServerMsgType.ConnectionDisconnectEvent:
@@ -1163,7 +1190,15 @@ namespace NeonNetworking
                     MatchData matchData = (MatchData)message;
                     Log("MATCH DATA RECIEVED: " + matchData.MatchName);
 
-                    Debug.LogWarning("Recieved match data when we didn't expect it");
+                    Debug.LogWarning("<color=yellow>Recieved match data when we didn't expect it</color>");
+
+                    if (timeRecieve)
+                    {
+                        recWatch.Stop();
+                        Debug.Log("<color=#4295f5>RECIEVE FINISH, TIME: " + recWatch.ElapsedMilliseconds + "</color>");
+                        Debug.Log("<color=#4295f5>MESSAGE RECIEVED: " + message.GetType() + "</color>");
+                    }
+
                     return;
                 #endregion
             }
@@ -1191,13 +1226,13 @@ namespace NeonNetworking
             if (timeRecieve)
             {
                 recWatch.Stop();
-                Debug.Log("RECIEVE FINISH, TIME: " + recWatch.ElapsedMilliseconds);
-                Debug.Log("MESSAGE RECIEVED: " + message.GetType());
+                Debug.Log("<color=#4295f5>RECIEVE FINISH, TIME: " + 1000 * ((float)recWatch.ElapsedTicks / System.Diagnostics.Stopwatch.Frequency) + "</color>");
+                Debug.Log("<color=#4295f5>MESSAGE RECIEVED: " + message.GetType() + "</color>");
 
                 if ((MessageType)type == MessageType.ServerMessage)
                 {
                     ServerMessage m = (ServerMessage)message;
-                    Debug.Log("SVR MSG: " + m.msgType);
+                    Debug.Log("<color=#4295f5>SVR MSG: " + m.msgType + "</color>");
                 }
             }
         }
