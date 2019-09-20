@@ -11,6 +11,8 @@ using System.Collections.Concurrent;
 using NeonNetworking.DataTypes;
 using NeonNetworking.Enums;
 using System.Linq;
+//using System.IO;
+//using System.Runtime.Serialization.Formatters.Binary;
 
 namespace NeonNetworking
 {
@@ -346,6 +348,47 @@ namespace NeonNetworking
             }
 
             DontDestroyOnLoad(gameObject);
+
+            /* comparing memory size between arrays and lists, fixed arrays save a lot of memory
+            object[] msgsA = new object[1024];
+
+            msgsA[0] = 9;
+            msgsA[1] = new VectorMessage(10, 24, 10);
+            msgsA[2] = 10;
+
+            List<object> msgs = new List<object>(1024);
+
+            msgs.Add(9);
+            msgs.Add(new VectorMessage(10, 24, 10));
+            msgs.Add(10);
+
+            VectorMessage v = (VectorMessage)msgs[1];
+
+            print("msgs 1 " + v.x);
+
+            v = (VectorMessage)msgsA[1];
+
+            print("msgs 2 " + v.y);
+
+            long size1 = 0;
+            using (Stream s = new MemoryStream())
+            {
+                BinaryFormatter formatter = new BinaryFormatter();
+                formatter.Serialize(s, msgs);
+                size1 = s.Length;
+            }
+
+            long size2 = 0;
+            using (Stream s = new MemoryStream())
+            {
+                BinaryFormatter formatter = new BinaryFormatter();
+                formatter.Serialize(s, msgsA);
+                size2 = s.Length;
+            }
+
+            print("Size " + size1);
+            print("Size 2 " + size2);
+            */
 
             mainThread = Thread.CurrentThread;
             socketRecieveThread = new Thread(Recieve);

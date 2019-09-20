@@ -1,10 +1,12 @@
 ﻿using System;
 using NeonNetworking.Enums;
 using OPS.Serialization.Attributes;
+using UnityEngine;
 
 namespace NeonNetworking.DataTypes
 {
     [SerializeAbleClass]
+    [Serializable]
     public class VectorMessage
     {
         public VectorMessage(float xin = 0, float yin = 0, float zin = 0)
@@ -37,6 +39,7 @@ namespace NeonNetworking.DataTypes
     */
 
     [SerializeAbleClass]
+    [Serializable]
     public class NetDestroyMsg
     {
         [SerializeAbleField(0)]
@@ -44,6 +47,7 @@ namespace NeonNetworking.DataTypes
     }
 
     [SerializeAbleClass]
+    [Serializable]
     public class MatchData
     {
         [SerializeAbleField(0)]
@@ -56,6 +60,7 @@ namespace NeonNetworking.DataTypes
     }
 
     [SerializeAbleClass]
+    [Serializable]
     public class ServerMessage
     {
         [SerializeAbleField(0)]
@@ -63,5 +68,25 @@ namespace NeonNetworking.DataTypes
 
         [SerializeAbleFieldOptional(1)]
         public string ID;
+    }
+
+    [SerializeAbleClass]
+    [Serializable]
+    public class PlayerData
+    {
+        [SerializeAbleField(0)]
+        public string playerID;
+
+        [SerializeAbleField(1)]
+        public Vector3 pos;
+
+        [SerializeAbleField(2)]
+        public Quaternion rot;
+
+        [SerializeAbleField(3)]
+        public Vector3 scale;
+
+        [SerializeAbleField(4)]
+        public string instanceID;
     }
 }
