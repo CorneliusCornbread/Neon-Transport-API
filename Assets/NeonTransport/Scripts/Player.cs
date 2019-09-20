@@ -48,14 +48,14 @@ namespace NeonNetworking
         {
             Debug.Log("ON DISCONNECT");
 
-            if (NetworkManager.Instance.isServer && client.ID == OwnerID)
+            if (NetworkManager.Instance.IsServer && client.ID == OwnerID)
                 NetworkManager.Instance.NetworkDestroy(InstanceID);
 
         }
 
         private void Update()
         {
-            if (NetworkManager.Instance.isServer)
+            if (NetworkManager.Instance.IsServer)
                 return;
 
             if (!started)
@@ -160,7 +160,7 @@ namespace NeonNetworking
 
         public override object SyncObj()
         {
-            if (!NetworkManager.Instance.isServer || (lastPos == transform.position && lastRot == transform.rotation && lastScale == transform.localScale))
+            if (!NetworkManager.Instance.IsServer || (lastPos == transform.position && lastRot == transform.rotation && lastScale == transform.localScale))
                 return null;
 
             PlayerData data = new PlayerData

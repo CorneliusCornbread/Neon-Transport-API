@@ -92,13 +92,13 @@ namespace NeonNetworking
         {
             if (man.highDebug)
             {
-                if (man.isQuitting)
+                if (man.IsQuitting)
                 {
                     Debug.LogWarning("Cannot broadcast a match when there is no match");
                     return;
                 }
 
-                else if (!man.isServer)
+                else if (!man.IsServer)
                 {
                     Debug.LogError("Cannot broadcast a match when you're a client");
                     return;
@@ -127,7 +127,7 @@ namespace NeonNetworking
         /// </summary>
         public void StartLANMatchRecieve()
         {
-            if (man.isServer)
+            if (man.IsServer)
             {
                 Debug.LogError("Cannot recieve matches if we are a server");
                 return;
@@ -186,7 +186,7 @@ namespace NeonNetworking
             MatchData match = new MatchData
             {
                 MatchName = man.ServerName,
-                PlayerCount = man.connectedClients.Count
+                PlayerCount = man.ConnectedClients.Count
             };
 
             IPEndPoint target = new IPEndPoint(IPAddress.Broadcast, NetworkManager.LANBroadcastPort);
@@ -213,7 +213,7 @@ namespace NeonNetworking
 
         private void MatchRecieve()
         {
-            if (Thread.CurrentThread.ManagedThreadId == man.mainThread.ManagedThreadId)
+            if (Thread.CurrentThread.ManagedThreadId == man.MainThread.ManagedThreadId)
             {
                 Debug.LogError("Match recieve tried to run on main thread");
                 return;

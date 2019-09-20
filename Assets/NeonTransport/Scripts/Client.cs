@@ -11,8 +11,22 @@ namespace NeonNetworking
         public EndPoint endPoint;
         public string ID;
         public float ping;
-        //public float pingMsgStartTime;
         public Stopwatch pingTimer = new Stopwatch();
-        //public List<GameObject> ownedObjects = new List<GameObject>();
+
+        public byte messagesFromTargetCount = 0;
+
+        //We use a byte to make sending ID's easier, we easily overflow this value however
+        //if we are sending a lot of data
+        /// <summary>
+        /// List of messages recieved from this client instance
+        /// </summary>
+        public object[] messagesFromTarget = new object[byte.MaxValue];
+
+        public byte messagesToTargetCount = 0;
+
+        /// <summary>
+        /// List of messages sent to this client instance
+        /// </summary>
+        public object[] messagesToTarget = new object[byte.MaxValue];
     }
 }

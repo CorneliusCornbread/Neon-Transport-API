@@ -21,7 +21,7 @@ namespace NeonNetworking
         {
             get
             {
-                return NetworkManager.Instance.isServer;
+                return NetworkManager.Instance.IsServer;
             }
         }
 
@@ -53,13 +53,13 @@ namespace NeonNetworking
 
         void Start()
         {
-            NetworkManager.Instance.netObjects.Add(this);
+            NetworkManager.Instance.NetObjects.Add(this);
         }
 
         private void OnDestroy()
         {
-            if (!NetworkManager.Instance.isQuitting)
-                NetworkManager.Instance.netObjects.Remove(this);
+            if (!NetworkManager.Instance.IsQuitting)
+                NetworkManager.Instance.NetObjects.Remove(this);
         }
 
         public void rec(MsgEvent msg, EndPoint sender)
