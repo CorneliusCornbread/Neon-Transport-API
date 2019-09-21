@@ -354,6 +354,24 @@ namespace NeonNetworking
 
             DontDestroyOnLoad(gameObject);
 
+            VectorMessage v = new VectorMessage
+            {
+                reliable = true,
+                messageNum = 12,
+                x = 10,
+                y = 12,
+                z = 9
+            };
+
+            byte[] p = Serializer.Serialize(v);
+
+            VectorMessage v2 = Serializer.DeSerialize<VectorMessage>(p);
+
+            print(v.x + ", " + v.y + ", " + v.z);
+
+            print("num " + v2.messageNum);
+            print("reliable " + v2.reliable);
+
             /* comparing memory size between arrays and lists, fixed arrays save a lot of memory
             object[] msgsA = new object[1024];
 
@@ -1244,7 +1262,7 @@ namespace NeonNetworking
                 case MessageType.MatchData:
                     eventRec = true;
                     MatchData matchData = (MatchData)message;
-                    Log("MATCH DATA RECIEVED: " + matchData.MatchName);
+                    Log("MATCH DATA RECIEVED: " + matchData.matchName);
 
                     Debug.LogWarning("<color=yellow>Recieved match data when we didn't expect it</color>");
 
@@ -1310,15 +1328,15 @@ namespace NeonNetworking
         /// <param name="data">Data recieved</param>
         public virtual void OnMatchRecieve(MatchData m)
         {
-            Debug.LogError("MATCH: " + m.MatchName);
+            Debug.LogError("MATCH: " + m.matchName);
         }
 
         public virtual MatchData OnMatchRequest()
         {
             MatchData m = new MatchData
             {
-                MatchName = ServerName,
-                PlayerCount = ConnectedClients.Count
+                matchName = ServerName,
+                playerCount = ConnectedClients.Count
             };
 
             return m;

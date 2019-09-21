@@ -5,17 +5,26 @@ using UnityEngine;
 
 namespace NeonNetworking.DataTypes
 {
+    [ClassInheritance(typeof(VectorMessage), 0)]
+    [ClassInheritance(typeof(NetDestroyMsg), 1)]
+    [ClassInheritance(typeof(MatchData), 2)]
+    [ClassInheritance(typeof(ServerMessage), 3)]
+    [ClassInheritance(typeof(PlayerData), 4)]
     [SerializeAbleClass]
     [Serializable]
-    public class VectorMessage
+    public class MessageBase //You can have a class inheritance tag but the class doesn't HAVE to inherit from message base
     {
-        public VectorMessage(float xin = 0, float yin = 0, float zin = 0)
-        {
-            x = xin;
-            y = yin;
-            z = zin;
-        }
+        [SerializeAbleField(0)]
+        public bool reliable = false;
 
+        [SerializeAbleField(1)]
+        public byte messageNum = 0;
+    }
+
+    [SerializeAbleClass]
+    [Serializable]
+    public class VectorMessage : MessageBase
+    {
         [SerializeAbleField(0)]
         public float x;
 
@@ -26,21 +35,9 @@ namespace NeonNetworking.DataTypes
         public float z;
     }
 
-    /* Client ID MSG
-    [SerializeAbleClass]
-    public class ClientIDMsg
-    {
-        [SerializeAbleField(0)]
-        public string msg;
-
-        [SerializeAbleField(1)]
-        public string ID;
-    }
-    */
-
     [SerializeAbleClass]
     [Serializable]
-    public class NetDestroyMsg
+    public class NetDestroyMsg : MessageBase
     {
         [SerializeAbleField(0)]
         public string IDToDestroy;
@@ -48,20 +45,20 @@ namespace NeonNetworking.DataTypes
 
     [SerializeAbleClass]
     [Serializable]
-    public class MatchData
+    public class MatchData : MessageBase
     {
         [SerializeAbleField(0)]
-        public string MatchName;
+        public string matchName;
 
         [SerializeAbleField(1)]
-        public int PlayerCount;
+        public int playerCount;
 
         public System.Net.EndPoint sender;
     }
 
     [SerializeAbleClass]
     [Serializable]
-    public class ServerMessage
+    public class ServerMessage : MessageBase
     {
         [SerializeAbleField(0)]
         public ServerMsgType msgType;
@@ -72,7 +69,7 @@ namespace NeonNetworking.DataTypes
 
     [SerializeAbleClass]
     [Serializable]
-    public class PlayerData
+    public class PlayerData : MessageBase
     {
         [SerializeAbleField(0)]
         public string playerID;

@@ -185,8 +185,8 @@ namespace NeonNetworking
         {
             MatchData match = new MatchData
             {
-                MatchName = man.ServerName,
-                PlayerCount = man.ConnectedClients.Count
+                matchName = man.ServerName,
+                playerCount = man.ConnectedClients.Count
             };
 
             IPEndPoint target = new IPEndPoint(IPAddress.Broadcast, NetworkManager.LANBroadcastPort);
