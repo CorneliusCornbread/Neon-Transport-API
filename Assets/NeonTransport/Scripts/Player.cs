@@ -141,20 +141,20 @@ namespace NeonNetworking
                     targetPos = pData.pos;
                     targetRot = pData.rot;
                     targetScale = pData.scale;
-                }
 
-                if (prediction)
-                {
-                    Vector3 predictedDelta = new Vector3
+                    if (prediction)
                     {
-                        x = pData.pos.x - lastRealPos.x,
-                        y = pData.pos.y - lastRealPos.y,
-                        z = pData.pos.z - lastRealPos.z
-                    };
+                        Vector3 predictedDelta = new Vector3
+                        {
+                            x = pData.pos.x - lastRealPos.x,
+                            y = pData.pos.y - lastRealPos.y,
+                            z = pData.pos.z - lastRealPos.z
+                        };
 
-                    lastRealPos = pData.pos;
-                    targetPos += predictedDelta * (ping / 1000);
-                }
+                        lastRealPos = pData.pos;
+                        targetPos += predictedDelta * (ping / 1000);
+                    }
+                }   
             }
         }
 
