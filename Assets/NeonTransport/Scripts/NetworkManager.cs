@@ -1714,6 +1714,7 @@ namespace NeonNetworking
             if (Thread.CurrentThread.ManagedThreadId != MainThread.ManagedThreadId)
             {
                 pendingDestroy.Enqueue(instanceID);
+                Log("On net destroy called on non main thread, queing for main thread");
                 return;
             }
 
