@@ -88,6 +88,7 @@ namespace NeonNetworking
         private volatile ConcurrentQueue<Client> disClientEvents;
         private volatile ConcurrentQueue<MsgEvent> currentMsgs;
         private volatile ConcurrentQueue<NetInstantiate> pendingObjs;
+        private volatile ConcurrentQueue<string> pendingDestroy;
         private volatile ConcurrentQueue<ThreadedInstantiate> threadedInstantiate;
         private volatile ConcurrentQueue<Client> pendingClientDisconnects;
         private volatile ConcurrentQueue<EndPoint> pendingEndpointsDisconnects;
@@ -447,6 +448,16 @@ namespace NeonNetworking
                     }
                 }
 
+                for (int i = 0; i < pendingDestroy.Count; i++)
+                {
+                    string obj;
+
+                    if (pendingDestroy.TryDequeue(out obj))
+                    {
+                        OnNetDestroy(obj);
+                    }
+                }
+
                 for (int i = 0; i < currentMsgs.Count; i++)
                 {
                     MsgEvent msg = new MsgEvent();
@@ -649,6 +660,7 @@ namespace NeonNetworking
             disClientEvents = new ConcurrentQueue<Client>();
             pendingEndpointsDisconnects = new ConcurrentQueue<EndPoint>();
             pendingObjs = new ConcurrentQueue<NetInstantiate>();
+            pendingDestroy = new ConcurrentQueue<string>();
             threadedInstantiate = new ConcurrentQueue<ThreadedInstantiate>();
 
             Invoke("SyncStep", 0);
@@ -703,6 +715,7 @@ namespace NeonNetworking
             disClientEvents = new ConcurrentQueue<Client>();
             pendingEndpointsDisconnects = new ConcurrentQueue<EndPoint>();
             pendingObjs = new ConcurrentQueue<NetInstantiate>();
+            pendingDestroy = new ConcurrentQueue<string>();
             threadedInstantiate = new ConcurrentQueue<ThreadedInstantiate>();
 
             string targetip = ip;
@@ -1253,7 +1266,7 @@ namespace NeonNetworking
 
                     else
                     {
-                        OnNetDestroy(netDestroy.IDToDestroy);
+                        OnNetDestroy(netDestroy.IDToDestroy); //Error
                     }
                     break;
                 #endregion
@@ -1555,6 +1568,7 @@ namespace NeonNetworking
 
                     NetObjects = null;
                     pendingObjs = null;
+                    pendingDestroy = null;
                     ConnectedClients = null;
                     currentMsgs = null;
                     threadedInstantiate = null;
@@ -1597,6 +1611,7 @@ namespace NeonNetworking
 
                     NetObjects = null;
                     pendingObjs = null;
+                    pendingDestroy = null;
                     ConnectedClients = null;
                     clientConnection = null;
                     currentMsgs = null;
@@ -1861,11 +1876,11 @@ namespace NeonNetworking
 
             if (IsServer)
             {
-                foreach (Client c in ConnectedClients)
+                for (int i = 0; i < ConnectedClients.Count; i++)
                 {
-                    c.pingTimer.Restart();
+                    ConnectedClients[i].pingTimer.Restart();
                     ServerMessage msg = new ServerMessage { msgType = ServerMsgType.PingEvent };
-                    Send(msg, c.endPoint);
+                    Send(msg, ConnectedClients[i].endPoint);
                 }
             }
 
