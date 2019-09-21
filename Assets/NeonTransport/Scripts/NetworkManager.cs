@@ -1711,6 +1711,12 @@ namespace NeonNetworking
 
         private void OnNetDestroy(string instanceID)
         {
+            if (Thread.CurrentThread.ManagedThreadId != MainThread.ManagedThreadId)
+            {
+                pendingDestroy.Enqueue(instanceID);
+                return;
+            }
+
             NetworkObject obj = NetObjects.Find(i => i.InstanceID == instanceID);
 
             if (obj == null)
