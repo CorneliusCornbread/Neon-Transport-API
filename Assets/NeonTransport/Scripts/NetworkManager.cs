@@ -25,7 +25,6 @@ namespace NeonNetworking
 
         public static NetworkManager Instance { get; private set; }
         public static MatchManager MatchManager { get; private set; }
-        public static ReliableMessageManager RMessageManager { get; private set; }
         public NetworkPrefabs Prefabs;
         public Socket Socket { get; private set; }
         public Thread SocketRecieveThread { get; private set; }
@@ -350,7 +349,6 @@ namespace NeonNetworking
             {
                 Instance = this;
                 MatchManager = new MatchManager();
-                RMessageManager = new ReliableMessageManager();
             }
 
             DontDestroyOnLoad(gameObject);
@@ -796,7 +794,25 @@ namespace NeonNetworking
                     {
                         string message = "Recieved exception from prepSend: " + ex.ToString();
                         Debug.LogError(message + ", MSG: " + msg);
-                        throw new Exception(message);
+                        return;
+                    }
+
+                    if (IsServer)
+                    {
+                        Debug.Log("Client sel");
+
+
+                        List<Client> clients = new List<Client>(ConnectedClients);
+
+                        foreach (Client c in clients)
+                        {
+                            if (c.endPoint.Equals(target))
+                            {
+                                HandleMessageSent(c, msg);
+                                Debug.Log("Client sel");
+                                break;
+                            }
+                        }                        
                     }
 
                     Socket.SendTo(packet, target);
@@ -821,6 +837,25 @@ namespace NeonNetworking
                     args.SetBuffer(packet, 0, packet.Length);
                     args.Completed += OnSend;
                     args.RemoteEndPoint = target;
+
+                    //Reliable stuff
+                    if (IsServer)
+                    {
+                        Debug.Log("Client sel start");
+
+
+                        List<Client> clients = new List<Client>(ConnectedClients);
+
+                        foreach (Client c in clients)
+                        {
+                            if (c.endPoint.Equals(target))
+                            {
+                                HandleMessageSent(c, msg);
+                                Debug.Log("Client sel");
+                                break;
+                            }
+                        }
+                    }
 
                     Socket.SendToAsync(args);
                     break;
@@ -851,6 +886,25 @@ namespace NeonNetworking
             Thread.Sleep(simulatedLag);
 #           endif
 
+            //Reliable stuff
+            if (IsServer)
+            {
+                Debug.Log("Client sel start");
+
+
+                List<Client> clients = new List<Client>(ConnectedClients);
+
+                foreach (Client c in clients)
+                {
+                    if (c.endPoint.Equals(target))
+                    {
+                        HandleMessageSent(c, msg);
+                        Debug.Log("Client sel");
+                        break;
+                    }
+                }
+            }
+
             try
             {
                 packet = prepSend(msg);
@@ -870,7 +924,36 @@ namespace NeonNetworking
             Log("Threaded send end");
         }
 
-        
+        #region Reliable message sending
+        /*
+        /// <summary>
+        /// Function to handle a recieved message and track it
+        /// </summary>
+        private void HandleMessageRec(Client sender, object message)
+        {
+            sender.messagesFromTarget[sender.messagesFromTargetCount] = message;
+
+            sender.messagesFromTargetCount++;
+        }
+        */
+
+        private void HandleMessageSent(Client target, object message)
+        {
+            if (target.messagesToTargetCount == byte.MaxValue - 1)
+            {
+                target.messagesToTarget[target.messagesToTargetCount] = message;
+
+                target.messagesToTargetCount = 0;
+            }
+
+            else
+            {
+                target.messagesToTarget[target.messagesToTargetCount] = message;
+
+                target.messagesToTargetCount++;
+            }
+        }
+        #endregion
 
         /// <summary>
         /// Broadcast function for server
@@ -892,6 +975,7 @@ namespace NeonNetworking
 
                     foreach (Client client in ConnectedClients)
                     {
+                        HandleMessageSent(client, msg);
                         Socket.SendTo(packet, client.endPoint);
                     }
                     break;
@@ -918,6 +1002,7 @@ namespace NeonNetworking
 
                     foreach (Client c in ConnectedClients)
                     {
+                        HandleMessageSent(c, msg);
                         args.RemoteEndPoint = c.endPoint;
                         Socket.SendToAsync(args);
                     }
@@ -943,6 +1028,9 @@ namespace NeonNetworking
             if (msg == null)
                 throw new ArgumentNullException("Cannot broadcast a null object");
 
+            else if (!IsServer)
+                throw new InvalidOperationException("Cannot call broadcast when we are not a server");
+
             byte[] packet;
 
             try
@@ -959,6 +1047,7 @@ namespace NeonNetworking
 
             foreach (Client c in clients)
             {
+                HandleMessageSent(c, msg);
                 Socket.SendTo(packet, c.endPoint);
             }
         }
@@ -1370,7 +1459,11 @@ namespace NeonNetworking
                 conn.endPoint = connection;
                 conn.ID = Guid.NewGuid().ToString();
 
-                ConnectedClients.Add(conn);
+                if (ConnectedClients.Find(c => c.endPoint.Equals(connection)) != null)
+                    Debug.LogError("Client is already connected");
+                
+                else
+                    ConnectedClients.Add(conn);
 
                 //ClientIDMsg iDMsg = new ClientIDMsg { ID = conn.ID, msg = "HELLO CLIENT"};
                 ServerMessage iDMsg = new ServerMessage { msgType = ServerMsgType.ConnectAcceptEvent, ID = conn.ID };
@@ -1864,9 +1957,11 @@ namespace NeonNetworking
 
             foreach (NetworkObject obj in NetObjects)
             {
-                if (obj.SyncObj() != null)
+                object data = obj.SyncObj();
+
+                if (data != null)
                 {
-                    Send(obj.SyncObj(), clientConnection);
+                    Send(data, clientConnection);
                 }
             }
 

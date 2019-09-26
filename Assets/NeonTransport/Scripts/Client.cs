@@ -13,20 +13,39 @@ namespace NeonNetworking
         public float ping;
         public Stopwatch pingTimer = new Stopwatch();
 
-        public byte messagesFromTargetCount = 0;
+        public volatile byte messagesFromTargetCount = 0;
 
         //We use a byte to make sending ID's easier, we easily overflow this value however
         //if we are sending a lot of data
         /// <summary>
         /// List of messages recieved from this client instance
         /// </summary>
-        public object[] messagesFromTarget = new object[byte.MaxValue];
+        public volatile object[] messagesFromTarget = new object[byte.MaxValue];
 
-        public byte messagesToTargetCount = 0;
+        public volatile byte messagesToTargetCount = 0;
 
         /// <summary>
         /// List of messages sent to this client instance
         /// </summary>
-        public object[] messagesToTarget = new object[byte.MaxValue];
+        private volatile object[] messagesToTargetVal = new object[byte.MaxValue];
+        public volatile object lockObj2 = new object();
+        public object[] messagesToTarget
+        {
+            get
+            {
+                lock (lockObj2)
+                {
+                    return messagesToTargetVal;
+                }
+            }
+
+            set
+            {
+                lock (lockObj2)
+                {
+                    messagesToTargetVal = value;
+                }
+            }
+        }
     }
 }
