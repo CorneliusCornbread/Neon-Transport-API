@@ -173,6 +173,11 @@ namespace NeonNetworking
             }
         }
 
+        /// <summary>
+        /// Takes serializable object and turns it into a network message
+        /// </summary>
+        /// <param name="msg">Message object we want to serialize</param>
+        /// <returns>Network message to send</returns>
         public byte[] prepSend(object msg)
         {
             if (msg == null)
@@ -248,7 +253,7 @@ namespace NeonNetworking
         /// Convert string to a IPV4 or IPV6 endpoint.
         /// </summary>
         /// <param name="endPoint">Input string we want to convert</param>
-        /// <returns></returns>
+        /// <returns>Returns IPEndPoint based on string</returns>
         public static IPEndPoint CreateIPEndPoint(string endPoint) //Stolen from stack overflow: https://stackoverflow.com/a/2727880
         {
             string[] ep = endPoint.Split(':');
