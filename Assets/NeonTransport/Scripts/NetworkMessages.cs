@@ -65,6 +65,9 @@ namespace NeonNetworking.DataTypes
 
         [SerializeAbleFieldOptional(1)]
         public string ID;
+
+        [SerializeAbleFieldOptional(2)]
+        public string ServerID;
     }
 
     [SerializeAbleClass]
