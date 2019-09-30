@@ -80,8 +80,13 @@ namespace NeonNetworking
         [Tooltip("The amount of simulated delay in miliseconds")]
         [Range(0, 2000)]
         public int simulatedLag = 0;
+
+        [Tooltip("Percent of simulated packet loss")]
+        [Range(0, 100)]
+        public int packetLoss = 0;
         #endif
 
+        private byte lastPacketID = 0;
         private float syncDelay = .15f;
 
         private volatile ConcurrentQueue<Client> disClientEvents;
@@ -791,20 +796,18 @@ namespace NeonNetworking
 
         #region Send and Recieve data functions
         /// <summary>
-        /// Send variable to a given target
+        /// Send variable to a given target, used for custom messages
         /// </summary>
         /// <param name="msg">Message you want to send</param>
         /// <param name="target">Target endpoint</param>
         /// <param name="method">Send method (asynchronous, synchronous, threaded), threaded by default</param>
-        public void Send(object msg, EndPoint target, SendMethod method = SendMethod.Threaded)
+        public void Send<T>(T msg, EndPoint target) where T : MessageBase
         {
             if (IsQuitting)
             {
                 Debug.LogWarning("We're quitting so we're skipping this send");
                 return;
             }
-
-            pendingData = true;
 
             Log("SENDING: " + msg);
 
@@ -814,81 +817,43 @@ namespace NeonNetworking
                 return;
             }
 
-            byte[] packet;
-
-            switch (method)
+            //Adds number to message
+            //NOTE: If we send a generic message AT ALL, we track it but don't account for it leading to packet loss stat
+            //no longer being accurate
+            if (IsServer)
             {
-                case SendMethod.Sync:
-                    try
-                    {
-                        packet = prepSend(msg);
-                    }
-
-                    catch (Exception ex)
-                    {
-                        string message = "Recieved exception from prepSend: " + ex.ToString();
-                        Debug.LogError(message + ", MSG: " + msg);
-                        return;
-                    }
-
-                    if (IsServer)
-                    {
-                        Client c = ConnectedClients.Find(i => i.endPoint.Equals(target));
-                        HandleMessageSent(c, msg);
-                    }
-
-                    else
-                    {
-                        HandleMessageSent(serverData, msg);
-                    }
-
-                    Socket.SendTo(packet, target);
-                    pendingData = false;
-                    break;
-
-                case SendMethod.Async:
-                    try
-                    {
-                        packet = prepSend(msg);
-                    }
-
-                    catch (Exception ex)
-                    {
-                        string message = "Recieved exception from prepSend: " + ex.ToString();
-                        Debug.LogError(message + ", MSG: " + msg);
-                        throw new Exception(message);
-                    }
-
-                    //Arguments for async send
-                    SocketAsyncEventArgs args = new SocketAsyncEventArgs();
-                    args.SetBuffer(packet, 0, packet.Length);
-                    args.Completed += OnSend;
-                    args.RemoteEndPoint = target;
-
-                    //Reliable stuff
-                    if (IsServer)
-                    {
-                        Client c = ConnectedClients.Find(i => i.endPoint.Equals(target));
-                        HandleMessageSent(c, msg);
-                    }
-
-                    else
-                    {
-                        HandleMessageSent(serverData, msg);
-                    }
-
-                    Socket.SendToAsync(args);
-                    break;
-
-                case SendMethod.Threaded:
-                    SocketSendThread = new Thread(() => ThreadedSerializeSend(msg, target));
-                    SocketSendThread.Start();
-                    break;
-
-                default:
-                    string error = "Send input invalid enum selection: " + method;
-                    throw new NotImplementedException(error);
+                Client cl = ConnectedClients.Find(c => c.endPoint.Equals(target));
+                msg.messageNum = cl.messagesFromTargetCount;
             }
+
+            SocketSendThread = new Thread(() => ThreadedSerializeSend(msg, target));
+            SocketSendThread.Start();
+        }
+
+        /// <summary>
+        /// Send variable to a given target, used for custom messages
+        /// </summary>
+        /// <param name="msg">Message you want to send</param>
+        /// <param name="target">Target endpoint</param>
+        /// <param name="method">Send method (asynchronous, synchronous, threaded), threaded by default</param>
+        public void Send(object msg, EndPoint target)
+        {
+            if (IsQuitting)
+            {
+                Debug.LogWarning("We're quitting so we're skipping this send");
+                return;
+            }
+
+            Log("SENDING: " + msg);
+
+            if (target == null)
+            {
+                Debug.LogError("Endpoint cannot be null");
+                return;
+            }
+
+            SocketSendThread = new Thread(() => ThreadedSerializeSend(msg, target));
+            SocketSendThread.Start();
         }
 
         /// <summary>
@@ -902,10 +867,6 @@ namespace NeonNetworking
         
             byte[] packet;
 
-            #if UNITY_EDITOR
-            Thread.Sleep(simulatedLag);
-#           endif
-
             //Reliable stuff
             if (IsServer)
             {
@@ -918,6 +879,17 @@ namespace NeonNetworking
                 HandleMessageSent(serverData, msg);
             }
 
+            #if UNITY_EDITOR
+            Thread.Sleep(simulatedLag);
+
+            System.Random rng = new System.Random();
+
+            if (packetLoss != 0 && rng.Next(0, 101) <= packetLoss)
+            {
+                Debug.LogWarning("Dropping message");
+                return;
+            }
+#           endif
 
             try
             {
@@ -998,6 +970,21 @@ namespace NeonNetworking
 
                     target.messagesFromTargetCount++;
                 }
+
+                try
+                {
+                    MessageBase m = (MessageBase)message;
+
+                    Debug.Log("num " + m.messageNum);
+                    Debug.Log("Percent " + (float)lastPacketID / m.messageNum * 100 + "%");
+                }
+
+                catch
+                {
+                    Debug.LogError("lakjdsflkasjglksadh");
+                }
+
+                lastPacketID = target.messagesFromTargetCount;
             }
             catch (Exception)
             {
@@ -1010,7 +997,7 @@ namespace NeonNetworking
         /// Broadcast function for server
         /// </summary>
         /// <param name="msg">Message to broadcast</param>
-        public void Broadcast(object msg, SendMethod method = SendMethod.Threaded)
+        public void Broadcast(object msg)
         {
             if (!IsServer)
             {
@@ -1025,51 +1012,8 @@ namespace NeonNetworking
 
             Log("Broadcast: " + msg);
 
-            switch (method)
-            {
-                case SendMethod.Sync:
-                    byte[] packet = prepSend(msg);
-
-                    foreach (Client client in ConnectedClients)
-                    {
-                        HandleMessageSent(client, msg);
-                        Socket.SendTo(packet, client.endPoint);
-                    }
-                    break;
-
-                case SendMethod.Async:
-                    byte[] packetAsync = prepSend(msg);
-
-                    try
-                    {
-                        packet = prepSend(msg);
-                    }
-
-                    catch (Exception ex)
-                    {
-                        string message = "Recieved exception from prepSend: " + ex.ToString();
-                        Debug.LogError(message + ", MSG: " + msg);
-                        throw new Exception(message);
-                    }
-
-                    //Arguments for async send
-                    SocketAsyncEventArgs args = new SocketAsyncEventArgs();
-                    args.SetBuffer(packet, 0, packet.Length);
-                    args.Completed += OnSend;
-
-                    foreach (Client c in ConnectedClients)
-                    {
-                        HandleMessageSent(c, msg);
-                        args.RemoteEndPoint = c.endPoint;
-                        Socket.SendToAsync(args);
-                    }
-                    break;
-
-                case SendMethod.Threaded:
-                    SocketBroadcastThread = new Thread(() => ThreadedBroadcast(msg, ConnectedClients.ToArray()));
-                    SocketBroadcastThread.Start();
-                    break;
-            }
+            SocketBroadcastThread = new Thread(() => ThreadedBroadcast(msg, ConnectedClients.ToArray()));
+            SocketBroadcastThread.Start();
 
             Log("Broadcast completed");
 
@@ -1105,6 +1049,19 @@ namespace NeonNetworking
             foreach (Client c in clients)
             {
                 HandleMessageSent(c, msg);
+
+                #if UNITY_EDITOR
+                Thread.Sleep(simulatedLag);
+
+                System.Random rng = new System.Random();
+
+                if (packetLoss != 0 && rng.Next(0, 101) <= packetLoss)
+                {
+                    Debug.LogWarning("Dropping message");
+                    return;
+                }
+                #endif
+
                 Socket.SendTo(packet, c.endPoint);
             }
         }

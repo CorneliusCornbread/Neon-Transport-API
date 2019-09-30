@@ -10,6 +10,7 @@ namespace NeonNetworking.DataTypes
     [ClassInheritance(typeof(MatchData), 2)]
     [ClassInheritance(typeof(ServerMessage), 3)]
     [ClassInheritance(typeof(PlayerData), 4)]
+    [ClassInheritance(typeof(NetInstantiate), 5)]
     [SerializeAbleClass]
     [Serializable]
     public class MessageBase //You can have a class inheritance tag but the class doesn't HAVE to inherit from message base
@@ -88,5 +89,24 @@ namespace NeonNetworking.DataTypes
 
         [SerializeAbleField(4)]
         public string instanceID;
+    }
+
+    [SerializeAbleClass]
+    public class NetInstantiate : MessageBase
+    {
+        [SerializeAbleField(0)]
+        public string objName;
+
+        [SerializeAbleField(1)]
+        public int prefabID;
+
+        [SerializeAbleField(2)]
+        public Vector3 pos;
+
+        [SerializeAbleField(3)]
+        public string instanceID;
+
+        [SerializeAbleField(4)]
+        public string senderID;
     }
 }

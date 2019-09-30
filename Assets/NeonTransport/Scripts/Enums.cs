@@ -52,20 +52,4 @@
         /// </summary>
         ConnectionDisconnectEvent
     }
-
-    public enum SendMethod
-    {
-        /// <summary>
-        /// Send data asynchronously on the main thread
-        /// </summary>
-        Async,
-        /// <summary>
-        /// Send data synchronously on the main thread
-        /// </summary>
-        Sync,
-        /// <summary>
-        /// Send data on another thread
-        /// </summary>
-        Threaded
-    }
 }
