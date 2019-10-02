@@ -84,7 +84,7 @@ namespace NeonNetworking
         [Tooltip("Percent of simulated packet loss")]
         [Range(0, 100)]
         public int packetLoss = 0;
-        #endif
+#endif
 
         private byte lastPacketID = 0;
         private float syncDelay = .15f;
@@ -911,18 +911,6 @@ namespace NeonNetworking
         }
 
         #region Reliable message sending
-        /*
-        /// <summary>
-        /// Function to handle a recieved message and track it
-        /// </summary>
-        private void HandleMessageRec(Client sender, object message)
-        {
-            sender.messagesFromTarget[sender.messagesFromTargetCount] = message;
-
-            sender.messagesFromTargetCount++;
-        }
-        */
-
         private void HandleMessageSent(Client target, object message)
         {
             if (IsQuitting)
@@ -975,8 +963,13 @@ namespace NeonNetworking
                 {
                     MessageBase m = (MessageBase)message;
 
-                    Debug.Log("num " + m.messageNum);
-                    Debug.Log("Percent " + (float)lastPacketID / m.messageNum * 100 + "%");
+                    if (m.messageNum == 0)
+                        return;
+
+                    Debug.LogWarning("Last " + (lastPacketID + 1) + " Current " + m.messageNum);
+                    Debug.Log("Percent " + (target.messagesFromTargetCount) / m.messageNum * 100 + "%");
+
+                    lastPacketID = m.messageNum;
                 }
 
                 catch
@@ -984,7 +977,6 @@ namespace NeonNetworking
                     Debug.LogError("lakjdsflkasjglksadh");
                 }
 
-                lastPacketID = target.messagesFromTargetCount;
             }
             catch (Exception)
             {

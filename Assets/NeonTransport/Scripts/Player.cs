@@ -128,12 +128,8 @@ namespace NeonNetworking
 
         protected override void OnRecieve(MsgEvent msg, EndPoint sender)
         {
-            Debug.LogWarning("PLAYER REC");
-
             if (msg.msg.GetType() == typeof(PlayerData))
             {
-                Debug.LogWarning("PLAYERDATA TYPE");
-
                 PlayerData pData = (PlayerData)msg.msg;
 
                 if (pData.instanceID == InstanceID && pData.playerID == OwnerID)
